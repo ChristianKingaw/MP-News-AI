@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — MP Disaster Alert{% endblock %}
+
+{% block content %}
+<h2>Dashboard</h2>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_articles }}</div>
+        <div class="stat-label">News Articles</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_posts }}</div>
+        <div class="stat-label">Total Posts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ active_alerts }}</div>
+        <div class="stat-label">Active Alerts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ pending_review }}</div>
+        <div class="stat-label">Pending Review</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ published }}</div>
+        <div class="stat-label">Published</div>
+    </div>
+</div>
+
+<div class="section-title">Quick Actions</div>
+<div style="display:flex;gap:1rem;">
+    <a href="/admin/posts" class="btn btn-primary">Review Posts</a>
+    <a href="/admin/news" class="btn btn-info">View News</a>
+    <a href="/admin/alerts" class="btn btn-warning">Manage Alerts</a>
+    <a href="/docs" class="btn btn-secondary">API Documentation</a>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Disaster Alerts — MP Disaster Alert{% endblock %}
+
+{% block content %}
+<h2>Disaster Alerts</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Reported</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for alert in alerts %}
+        <tr>
+            <td>{{ alert.title[:80] }}{% if alert.title|length > 80 %}...{% endif %}</td>
+            <td>
+                <span class="badge badge-info">{{ alert.alert_type.value }}</span>
+            </td>
+            <td>
+                {% set severity_badges = {
+                    'info': 'badge-info',
+                    'advisory': 'badge-primary',
+                    'watch': 'badge-warning',
+                    'warning': 'badge-warning',
+                    'critical': 'badge-danger',
+                } %}
+                <span class="badge {{ severity_badges.get(alert.severity.value, 'badge-secondary') }}">
+                    {{ alert.severity.value }}
+                </span>
+            </td>
+            <td>{{ alert.location or '—' }}</td>
+            <td>
+                {% set alert_status_badges = {
+                    'active': 'badge-danger',
+                    'resolved': 'badge-success',
+                    'archived': 'badge-secondary',
+                } %}
+                <span class="badge {{ alert_status_badges.get(alert.status.value, 'badge-secondary') }}">
+                    {{ alert.status.value }}
+                </span>
+            </td>
+            <td>{{ alert.reported_at.strftime('%Y-%m-%d %H:%M') if alert.reported_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align:center;padding:2rem;">No alerts found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Facebook Posts — MP Disaster Alert{% endblock %}
+
+{% block content %}
+<h2>Facebook Posts</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Caption</th>
+            <th>Image</th>
+            <th>Status</th>
+            <th>FB Post ID</th>
+            <th>Published</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for post in posts %}
+        <tr>
+            <td>{{ post.caption[:100] }}{% if post.caption|length > 100 %}...{% endif %}</td>
+            <td>
+                {% if post.image_url %}
+                    <span class="badge badge-success">Generated</span>
+                {% else %}
+                    <span class="badge badge-secondary">None</span>
+                {% endif %}
+            </td>
+            <td>
+                {% set status_badges = {
+                    'draft': 'badge-secondary',
+                    'pending_review': 'badge-warning',
+                    'approved': 'badge-primary',
+                    'rejected': 'badge-danger',
+                    'published': 'badge-success',
+                    'failed': 'badge-danger',
+                } %}
+                <span class="badge {{ status_badges.get(post.status.value, 'badge-secondary') }}">
+                    {{ post.status.value }}
+                </span>
+            </td>
+            <td>{{ post.fb_post_id or '—' }}</td>
+            <td>{{ post.published_at.strftime('%Y-%m-%d %H:%M') if post.published_at else '—' }}</td>
+            <td>
+                <button class="btn btn-success btn-sm" disabled>Approve</button>
+                <button class="btn btn-danger btn-sm" disabled>Reject</button>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align:center;padding:2rem;">No posts found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

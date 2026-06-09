@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mountain Province Disaster Alert System{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav>
+        <h1>MP Disaster Alert Admin</h1>
+        <div class="nav-links">
+            <a href="/admin">Dashboard</a>
+            <a href="/admin/news">News Articles</a>
+            <a href="/admin/posts">Facebook Posts</a>
+            <a href="/admin/alerts">Disaster Alerts</a>
+            <a href="/docs">API Docs</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

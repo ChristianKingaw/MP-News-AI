@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}News Articles — MP Disaster Alert{% endblock %}
+
+{% block content %}
+<h2>News Articles</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Source</th>
+            <th>Disaster Related</th>
+            <th>Status</th>
+            <th>Fetched</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for article in articles %}
+        <tr>
+            <td>{{ article.title[:80] }}{% if article.title|length > 80 %}...{% endif %}</td>
+            <td>
+                <span class="badge badge-info">{{ article.source_type.value }}</span>
+            </td>
+            <td>
+                {% if article.is_disaster_related %}
+                    <span class="badge badge-success">Yes</span>
+                {% else %}
+                    <span class="badge badge-secondary">No</span>
+                {% endif %}
+            </td>
+            <td>
+                {% set status_badges = {
+                    'raw': 'badge-secondary',
+                    'filtered': 'badge-info',
+                    'summarized': 'badge-primary',
+                    'published': 'badge-success',
+                    'rejected': 'badge-danger',
+                } %}
+                <span class="badge {{ status_badges.get(article.status.value, 'badge-secondary') }}">
+                    {{ article.status.value }}
+                </span>
+            </td>
+            <td>{{ article.fetched_at.strftime('%Y-%m-%d %H:%M') if article.fetched_at else '—' }}</td>
+            <td>
+                <button class="btn btn-primary btn-sm" disabled>View</button>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align:center;padding:2rem;">No articles found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
