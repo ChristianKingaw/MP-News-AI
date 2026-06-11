@@ -1,8 +1,12 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.post import FacebookPost, PostStatus
+from app.models.user import User
+from app.api.auth import require_auth, log_audit
+from app.models.audit import AuditAction
 from app.schemas.post import (
     FacebookPostResponse,
     FacebookPostList,
@@ -60,6 +64,7 @@ async def update_post(
     post_id: str,
     post_data: FacebookPostUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
 ):
     result = await db.execute(
         select(FacebookPost).where(FacebookPost.id == post_id)
@@ -75,13 +80,84 @@ async def update_post(
     db.add(post)
     await db.flush()
     await db.refresh(post)
+
+    await log_audit(
+        db,
+        AuditAction.UPDATED_ALERT,
+        "facebook_post",
+        post_id,
+        current_user.username,
+        f"Updated fields: {', '.join(update_dict.keys())}",
+    )
+
+    return FacebookPostResponse.model_validate(post)
+
+
+@router.post("/{post_id}/approve", response_model=FacebookPostResponse)
+async def approve_post(
+    post_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+):
+    result = await db.execute(
+        select(FacebookPost).where(FacebookPost.id == post_id)
+    )
+    post = result.scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    post.status = PostStatus.APPROVED
+    db.add(post)
+    await db.flush()
+    await db.refresh(post)
+
+    await log_audit(
+        db,
+        AuditAction.APPROVED_POST,
+        "facebook_post",
+        post_id,
+        current_user.username,
+    )
+
+    return FacebookPostResponse.model_validate(post)
+
+
+@router.post("/{post_id}/reject", response_model=FacebookPostResponse)
+async def reject_post(
+    post_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+):
+    result = await db.execute(
+        select(FacebookPost).where(FacebookPost.id == post_id)
+    )
+    post = result.scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    post.status = PostStatus.REJECTED
+    db.add(post)
+    await db.flush()
+    await db.refresh(post)
+
+    await log_audit(
+        db,
+        AuditAction.REJECTED_POST,
+        "facebook_post",
+        post_id,
+        current_user.username,
+    )
+
     return FacebookPostResponse.model_validate(post)
 
 
 @router.post("/{post_id}/publish", response_model=FacebookPostResponse)
-async def publish_post(post_id: str, db: AsyncSession = Depends(get_db)):
+async def publish_post(
+    post_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+):
     from app.services.facebook_service import facebook_service
-    from datetime import datetime
 
     result = await db.execute(
         select(FacebookPost).where(FacebookPost.id == post_id)
@@ -95,15 +171,28 @@ async def publish_post(post_id: str, db: AsyncSession = Depends(get_db)):
     )
 
     if publish_result["error"]:
-        post.status = PostStatus.FAILED
-        post.error_message = publish_result["error"]
+        post.retry_count += 1
+        post.last_error = publish_result["error"]
+        if post.retry_count >= 3:
+            post.status = PostStatus.FAILED
+            post.error_message = publish_result["error"]
     else:
         post.status = PostStatus.PUBLISHED
         post.fb_post_id = publish_result["fb_post_id"]
         post.fb_post_url = publish_result["fb_post_url"]
-        post.published_at = datetime.utcnow()
+        post.published_at = datetime.now(timezone.utc)
 
     db.add(post)
     await db.flush()
     await db.refresh(post)
+
+    await log_audit(
+        db,
+        AuditAction.MANUAL_PUBLISH if not publish_result["error"] else AuditAction.REJECTED_POST,
+        "facebook_post",
+        post_id,
+        current_user.username,
+        f"Publish result: {'success' if not publish_result['error'] else publish_result['error']}",
+    )
+
     return FacebookPostResponse.model_validate(post)

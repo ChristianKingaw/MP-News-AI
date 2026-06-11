@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from app.tasks.celery_app import celery_app
 from app.services.phivolcs import phivolcs_service
 from app.services.news_api import news_api_service
@@ -10,8 +11,19 @@ logger = logging.getLogger(__name__)
 async def _poll_and_store():
     from app.database import async_session_factory
     from app.services.alert_service import filter_and_store_article
+    from app.models.task_log import TaskLog, TaskStatus
+    from app.models.news import NewsArticle
+    from sqlalchemy import select, func
 
     async with async_session_factory() as db:
+        started_at = datetime.now(timezone.utc)
+        task_log = TaskLog(
+            task_name="poll_external_sources",
+            status=TaskStatus.STARTED,
+            started_at=started_at,
+        )
+        db.add(task_log)
+
         try:
             phivolcs_data = await phivolcs_service.fetch_earthquake_data()
             logger.info("Fetched %d PHIVOLCS earthquake records", len(phivolcs_data))
@@ -31,17 +43,76 @@ async def _poll_and_store():
             for article in rss_data:
                 await filter_and_store_article(db, article)
 
+            task_log.status = TaskStatus.SUCCESS
+            task_log.finished_at = datetime.now(timezone.utc)
+            task_log.items_processed = len(phivolcs_data) + len(news_data) + len(rss_data)
+
             await db.commit()
             logger.info("Poll cycle completed successfully")
 
         except Exception as e:
             logger.exception("Poll cycle failed: %s", e)
+            task_log.status = TaskStatus.FAILED
+            task_log.finished_at = datetime.now(timezone.utc)
+            task_log.error_message = str(e)
+            db.add(task_log)
+            await db.commit()
+
+
+async def _process_pending():
+    from app.database import async_session_factory
+    from app.services.alert_service import process_pending_articles
+    from app.models.task_log import TaskLog, TaskStatus
+
+    async with async_session_factory() as db:
+        started_at = datetime.now(timezone.utc)
+        task_log = TaskLog(
+            task_name="process_pending_articles",
+            status=TaskStatus.STARTED,
+            started_at=started_at,
+        )
+        db.add(task_log)
+
+        try:
+            posts = await process_pending_articles(db)
+            logger.info("Processed %d pending articles into posts", len(posts))
+
+            task_log.status = TaskStatus.SUCCESS
+            task_log.finished_at = datetime.now(timezone.utc)
+            task_log.items_processed = len(posts)
+
+            await db.commit()
+        except Exception as e:
+            logger.exception("Process pending articles failed: %s", e)
+            task_log.status = TaskStatus.FAILED
+            task_log.finished_at = datetime.now(timezone.utc)
+            task_log.error_message = str(e)
+            db.add(task_log)
+            await db.commit()
+
+
+async def _retry_failed():
+    from app.database import async_session_factory
+    from app.services.alert_service import retry_failed_posts
+
+    async with async_session_factory() as db:
+        try:
+            retried = await retry_failed_posts(db)
+            logger.info("Retried %d failed posts", len(retried))
+            await db.commit()
+        except Exception as e:
+            logger.exception("Retry failed posts failed: %s", e)
             await db.rollback()
 
 
 @celery_app.task(name="app.tasks.scheduler.poll_external_sources")
 def poll_external_sources():
     asyncio.run(_poll_and_store())
+
+
+@celery_app.task(name="app.tasks.scheduler.process_pending_articles")
+def process_pending_articles():
+    asyncio.run(_process_pending())
 
 
 @celery_app.task(name="app.tasks.scheduler.publish_approved_posts")
@@ -60,6 +131,11 @@ def publish_approved_posts():
                 await db.rollback()
 
     asyncio.run(_publish())
+
+
+@celery_app.task(name="app.tasks.scheduler.retry_failed_posts")
+def retry_failed_posts_task():
+    asyncio.run(_retry_failed())
 
 
 @celery_app.task(name="app.tasks.scheduler.process_article")

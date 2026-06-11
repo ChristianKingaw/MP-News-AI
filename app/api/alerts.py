@@ -1,8 +1,12 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.alert import DisasterAlert, AlertStatus, AlertSeverity
+from app.models.user import User
+from app.api.auth import require_auth, log_audit
+from app.models.audit import AuditAction
 from app.schemas.alert import (
     DisasterAlertCreate,
     DisasterAlertUpdate,
@@ -52,11 +56,22 @@ async def list_alerts(
 async def create_alert(
     alert_data: DisasterAlertCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
 ):
     alert = DisasterAlert(**alert_data.model_dump())
     db.add(alert)
     await db.flush()
     await db.refresh(alert)
+
+    await log_audit(
+        db,
+        AuditAction.CREATED_ALERT,
+        "disaster_alert",
+        str(alert.id),
+        current_user.username,
+        f"Created alert: {alert.title}",
+    )
+
     return DisasterAlertResponse.model_validate(alert)
 
 
@@ -79,6 +94,7 @@ async def update_alert(
     alert_id: str,
     alert_data: DisasterAlertUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
 ):
     result = await db.execute(
         select(DisasterAlert).where(DisasterAlert.id == alert_id)
@@ -92,10 +108,19 @@ async def update_alert(
         setattr(alert, key, value)
 
     if alert_data.status == AlertStatus.RESOLVED:
-        from datetime import datetime
-        alert.resolved_at = datetime.utcnow()
+        alert.resolved_at = datetime.now(timezone.utc)
 
     db.add(alert)
     await db.flush()
     await db.refresh(alert)
+
+    await log_audit(
+        db,
+        AuditAction.UPDATED_ALERT,
+        "disaster_alert",
+        alert_id,
+        current_user.username,
+        f"Updated: {', '.join(update_dict.keys())}",
+    )
+
     return DisasterAlertResponse.model_validate(alert)

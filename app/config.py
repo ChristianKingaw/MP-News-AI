@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str
     OPENAI_ORG_ID: str = ""
+    IMAGE_MODEL: str = "dall-e-3"
 
     FACEBOOK_PAGE_ID: str
     FACEBOOK_PAGE_ACCESS_TOKEN: str

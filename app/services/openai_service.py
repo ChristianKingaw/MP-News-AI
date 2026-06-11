@@ -19,7 +19,7 @@ class OpenAIService:
             organization=settings.OPENAI_ORG_ID or None,
         )
         self.model = "gpt-4o-mini"
-        self.image_model = "dall-e-3"
+        self.image_model = settings.IMAGE_MODEL
 
     async def summarize_article(self, title: str, content: str) -> str:
         try:

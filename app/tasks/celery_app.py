@@ -26,9 +26,19 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=f"*/{settings.POLLING_INTERVAL_MINUTES}"),
         "options": {"expires": 600},
     },
+    "process-pending-articles": {
+        "task": "app.tasks.scheduler.process_pending_articles",
+        "schedule": crontab(minute="*/15"),
+        "options": {"expires": 900},
+    },
     "publish-approved-posts": {
         "task": "app.tasks.scheduler.publish_approved_posts",
         "schedule": crontab(minute="*/30"),
+        "options": {"expires": 300},
+    },
+    "retry-failed-posts": {
+        "task": "app.tasks.scheduler.retry_failed_posts",
+        "schedule": crontab(minute="*/10"),
         "options": {"expires": 300},
     },
 }

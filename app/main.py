@@ -10,6 +10,7 @@ from app.api.alerts import router as alerts_router
 from app.api.news import router as news_router
 from app.api.posts import router as posts_router
 from app.api.dashboard import router as dashboard_router
+from app.api.auth import router as auth_router, seed_admin
 from app.admin.routes import router as admin_router
 
 settings = get_settings()
@@ -29,6 +30,13 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Mountain Province Disaster Alert System...")
     await init_db()
     logger.info("Database tables initialized")
+
+    from app.database import async_session_factory
+    async with async_session_factory() as session:
+        await seed_admin(session)
+        await session.commit()
+    logger.info("Default admin user seeded")
+
     yield
     logger.info("Shutting down...")
 
@@ -46,6 +54,7 @@ app.include_router(alerts_router)
 app.include_router(news_router)
 app.include_router(posts_router)
 app.include_router(dashboard_router)
+app.include_router(auth_router)
 app.include_router(admin_router)
 
 

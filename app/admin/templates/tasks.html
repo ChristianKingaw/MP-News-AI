@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Task Logs — MP Disaster Alert{% endblock %}
+
+{% block content %}
+<h2>Celery Task Logs</h2>
+
+{% if tasks %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Task Name</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Finished</th>
+            <th>Items</th>
+            <th>Error</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in tasks %}
+        <tr>
+            <td>{{ t.task_name }}</td>
+            <td>
+                {% if t.status.value == 'success' %}
+                <span class="badge badge-success">Success</span>
+                {% elif t.status.value == 'failed' %}
+                <span class="badge badge-danger">Failed</span>
+                {% else %}
+                <span class="badge badge-info">{{ t.status.value }}</span>
+                {% endif %}
+            </td>
+            <td>{{ t.started_at.strftime('%Y-%m-%d %H:%M') if t.started_at else '-' }}</td>
+            <td>{{ t.finished_at.strftime('%Y-%m-%d %H:%M') if t.finished_at else '-' }}</td>
+            <td>{{ t.items_processed }}</td>
+            <td>{{ t.error_message or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No task logs yet. Tasks will appear here as Celery beat runs scheduled jobs.</p>
+{% endif %}
+{% endblock %}

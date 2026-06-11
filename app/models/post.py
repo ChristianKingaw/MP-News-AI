@@ -1,7 +1,7 @@
 import uuid
 import enum
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Enum, Boolean, func, ForeignKey
+from sqlalchemy import String, Text, DateTime, Enum, Integer, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
@@ -40,6 +40,8 @@ class FacebookPost(Base):
         default=PostStatus.DRAFT,
         nullable=False,
     )
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     fb_post_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     fb_post_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(

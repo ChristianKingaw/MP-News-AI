@@ -28,6 +28,8 @@ class FacebookPostResponse(FacebookPostBase):
     image_url: str | None = None
     image_path: str | None = None
     status: PostStatus
+    retry_count: int
+    last_error: str | None = None
     fb_post_id: str | None = None
     fb_post_url: str | None = None
     published_at: datetime | None = None

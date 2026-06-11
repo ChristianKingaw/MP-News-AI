@@ -3,6 +3,9 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.news import NewsArticle, ArticleStatus, SourceType
+from app.models.user import User
+from app.api.auth import require_auth, log_audit
+from app.models.audit import AuditAction
 from app.schemas.news import (
     NewsArticleResponse,
     NewsArticleList,
@@ -66,6 +69,7 @@ async def update_article(
     article_id: str,
     article_data: NewsArticleUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
 ):
     result = await db.execute(
         select(NewsArticle).where(NewsArticle.id == article_id)
@@ -81,15 +85,86 @@ async def update_article(
     db.add(article)
     await db.flush()
     await db.refresh(article)
+
+    await log_audit(
+        db,
+        AuditAction.UPDATED_ALERT,
+        "news_article",
+        article_id,
+        current_user.username,
+        f"Updated fields: {', '.join(update_dict.keys())}",
+    )
+
     return NewsArticleResponse.model_validate(article)
 
 
+@router.post("/{article_id}/classify", response_model=dict)
+async def classify_article_endpoint(
+    article_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth),
+):
+    from app.services.alert_service import classify_article
+
+    article = await classify_article(db, article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    await log_audit(
+        db,
+        AuditAction.APPROVED_ARTICLE,
+        "news_article",
+        article_id,
+        current_user.username,
+        f"Classified: disaster_related={article.is_disaster_related}, severity={article.severity}",
+    )
+
+    return {
+        "status": "classified",
+        "is_disaster_related": article.is_disaster_related,
+        "severity": article.severity.value if article.severity else None,
+        "affected_location": article.affected_location,
+        "location_relevance_score": article.location_relevance_score,
+    }
+
+
 @router.post("/{article_id}/process", response_model=dict)
-async def process_article(article_id: str, db: AsyncSession = Depends(get_db)):
+async def process_article_endpoint(
+    article_id: str,
+    db: AsyncSession = Depends(get_db),
+    async_mode: bool = Query(True),
+    current_user: User = Depends(require_auth),
+):
+    if async_mode:
+        from app.tasks.scheduler import process_article_task
+
+        process_article_task.delay(article_id)
+
+        await log_audit(
+            db,
+            AuditAction.APPROVED_ARTICLE,
+            "news_article",
+            article_id,
+            current_user.username,
+            "Queued for async processing",
+        )
+
+        return {"status": "queued", "article_id": article_id}
+
     from app.services.alert_service import process_article_workflow
 
     post = await process_article_workflow(db, article_id)
     if not post:
         raise HTTPException(status_code=404, detail="Article not found")
+
+    await log_audit(
+        db,
+        AuditAction.APPROVED_ARTICLE,
+        "news_article",
+        article_id,
+        current_user.username,
+        f"Processed synchronously -> post {post.id}",
+    )
+
     await db.flush()
     return {"status": "processed", "post_id": str(post.id)}

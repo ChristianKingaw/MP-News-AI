@@ -30,3 +30,7 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+# others
+.ARCHITECTURE.md
+.AGENTS.md
