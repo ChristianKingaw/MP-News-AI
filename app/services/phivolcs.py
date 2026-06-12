@@ -1,5 +1,6 @@
 import logging
 import httpx
+from datetime import datetime, timezone
 from app.config import get_settings
 
 settings = get_settings()
@@ -8,8 +9,9 @@ logger = logging.getLogger(__name__)
 
 class PHIVOLCSService:
     def __init__(self):
-        self.base_url = settings.PHIVOLCS_BASE_URL
+        self.base_url = settings.EARTHQUAKE_API_URL
         self.keywords = settings.disaster_keywords_list
+        self.min_magnitude = 4.0
 
     async def fetch_earthquake_data(self) -> list[dict]:
         results: list[dict] = []
@@ -17,49 +19,89 @@ class PHIVOLCSService:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
-                    f"{self.base_url}/earthquakes",
-                    params={"format": "json"},
+                    self.base_url,
+                    params={
+                        "format": "geojson",
+                        "minmagnitude": self.min_magnitude,
+                        "minlatitude": 5.0,
+                        "maxlatitude": 21.0,
+                        "minlongitude": 116.0,
+                        "maxlongitude": 128.0,
+                        "orderby": "time",
+                        "limit": 50,
+                    },
                 )
                 response.raise_for_status()
                 data = response.json()
 
-                for eq in data if isinstance(data, list) else data.get("items", []):
-                    title = eq.get("title", eq.get("location", "Earthquake Alert"))
-                    content = self._format_earthquake_content(eq)
-                    mag = eq.get("magnitude", 0)
+                for feature in data.get("features", []):
+                    props = feature.get("properties", {})
+                    geom = feature.get("geometry", {})
+                    coords = geom.get("coordinates", [None, None, None])
 
-                    try:
-                        if float(mag) >= 4.0:
-                            results.append({
-                                "source_type": "phivolcs",
-                                "source_url": eq.get("url", ""),
-                                "title": title,
-                                "content": content,
-                                "keywords_matched": "earthquake,lindol",
-                                "is_disaster_related": True,
-                            })
-                    except (ValueError, TypeError):
-                        pass
+                    mag = props.get("mag", 0) or 0
+                    if float(mag) < self.min_magnitude:
+                        continue
+
+                    place = props.get("place", "Unknown location")
+                    title = f"M{mag} Earthquake - {place}"
+                    content = self._format_earthquake_content(props, coords)
+
+                    results.append({
+                        "source_type": "phivolcs",
+                        "source_url": props.get("url", ""),
+                        "title": title,
+                        "content": content,
+                        "keywords_matched": "earthquake,lindol",
+                        "is_disaster_related": True,
+                    })
 
         except httpx.HTTPError as e:
-            logger.error("PHIVOLCS API request failed: %s", e)
+            logger.error("USGS earthquake API request failed: %s", e)
         except Exception as e:
-            logger.exception("PHIVOLCS service error: %s", e)
+            logger.exception("Earthquake service error: %s", e)
 
         return results
 
-    def _format_earthquake_content(self, eq: dict) -> str:
+    def _format_earthquake_content(self, props: dict, coords: list) -> str:
         parts = []
-        if eq.get("title"):
-            parts.append(f"Title: {eq['title']}")
-        if eq.get("location"):
-            parts.append(f"Location: {eq['location']}")
-        if eq.get("magnitude"):
-            parts.append(f"Magnitude: {eq['magnitude']}")
-        if eq.get("depth"):
-            parts.append(f"Depth: {eq['depth']} km")
-        if eq.get("date_time"):
-            parts.append(f"Date/Time: {eq['date_time']}")
+
+        place = props.get("place", "Unknown")
+        parts.append(f"Location: {place}")
+
+        mag = props.get("mag")
+        if mag:
+            parts.append(f"Magnitude: {mag}")
+
+        depth = coords[2] if len(coords) > 2 and coords[2] is not None else None
+        if depth is not None:
+            parts.append(f"Depth: {depth:.1f} km")
+
+        felt = props.get("felt")
+        if felt:
+            parts.append(f"Felt reports: {felt}")
+
+        tsunami = props.get("tsunami", 0)
+        if tsunami:
+            parts.append("TSUNAMI WARNING ISSUED")
+
+        alert = props.get("alert")
+        if alert and alert != "green":
+            parts.append(f"Alert level: {alert}")
+
+        sig = props.get("sig", 0)
+        if sig >= 100:
+            parts.append(f"Significance: {sig} (high impact)")
+
+        time_ms = props.get("time")
+        if time_ms:
+            dt = datetime.fromtimestamp(time_ms / 1000, tz=timezone.utc)
+            parts.append(f"Time: {dt.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+        detail_url = props.get("url", "")
+        if detail_url:
+            parts.append(f"Details: {detail_url}")
+
         return "\n".join(parts) if parts else "No details available."
 
     def is_disaster_related(self, text: str) -> bool:

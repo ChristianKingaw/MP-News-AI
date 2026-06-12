@@ -12,15 +12,16 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
 
     OPENAI_API_KEY: str
-    OPENAI_ORG_ID: str = ""
-    IMAGE_MODEL: str = "dall-e-3"
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    TEXT_MODEL: str = "gpt-4o-mini"
+    IMAGE_MODEL: str = ""
 
     FACEBOOK_PAGE_ID: str
     FACEBOOK_PAGE_ACCESS_TOKEN: str
     META_GRAPH_API_VERSION: str = "v18.0"
 
     NEWS_API_KEY: str = ""
-    PHIVOLCS_BASE_URL: str = "https://earthquake.phivolcs.dost.gov.ph/api"
+    EARTHQUAKE_API_URL: str = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
     CELERY_BROKER_URL: str = "redis://redis:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"

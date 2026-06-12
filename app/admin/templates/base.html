@@ -3,25 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token if csrf_token else '' }}">
     <title>{% block title %}Mountain Province Disaster Alert System{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav>
-        <h1>MP Disaster Alert Admin</h1>
-        <div class="nav-links">
-            <a href="/admin">Dashboard</a>
-            <a href="/admin/news">News Articles</a>
-            <a href="/admin/posts">Facebook Posts</a>
-            <a href="/admin/alerts">Disaster Alerts</a>
-            <a href="/admin/tasks">Task Logs</a>
-            <a href="/admin/audit-logs">Audit Logs</a>
-            <a href="/docs">API Docs</a>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <nav class="navbar" role="navigation" aria-label="Main navigation">
+        <a href="/admin" class="navbar-brand" aria-label="Dashboard home">
+            <span class="navbar-brand-icon" aria-hidden="true">&#9888;</span>
+            <span>MP Disaster Alert</span>
+        </a>
+
+        <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="navbar-nav">
+            <span aria-hidden="true">&#9776;</span>
+        </button>
+
+        <ul class="navbar-nav" id="navbar-nav" role="menubar">
+            {% set nav_items = [
+                ('/admin', 'Dashboard'),
+                ('/admin/news', 'News'),
+                ('/admin/posts', 'Posts'),
+                ('/admin/alerts', 'Alerts'),
+                ('/admin/tasks', 'Tasks'),
+                ('/admin/audit-logs', 'Audit Logs'),
+                ('/docs', 'API Docs'),
+            ] %}
+            {% for href, label in nav_items %}
+            <li role="none">
+                <a href="{{ href }}" role="menuitem"
+                   {% if request.url.path == href or (href != '/admin' and request.url.path.startswith(href)) %}aria-current="page"{% endif %}>
+                    {{ label }}
+                </a>
+            </li>
+            {% endfor %}
+            {% if user %}
+            <li class="navbar-user-mobile" role="none">
+                <span>Signed in as <strong>{{ user.username }}</strong></span>
+                <button class="btn-logout" id="btn-logout-mobile">Log out</button>
+            </li>
+            {% endif %}
+        </ul>
+
+        {% if user %}
+        <div class="navbar-user">
+            <span class="navbar-user-name">{{ user.username }}</span>
+            <button class="btn-logout" id="btn-logout">Log out</button>
         </div>
+        {% endif %}
     </nav>
 
-    <div class="container">
+    <main id="main-content" class="main-container" tabindex="-1">
         {% block content %}{% endblock %}
-    </div>
+    </main>
+
+    <footer class="admin-footer" role="contentinfo">
+        Mountain Province Disaster Alert System
+    </footer>
+
+    <script src="/static/js/admin.js"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.api.alerts import router as alerts_router
 from app.api.news import router as news_router
 from app.api.posts import router as posts_router
 from app.api.dashboard import router as dashboard_router
-from app.api.auth import router as auth_router, seed_admin
+from app.api.auth import router as auth_router, seed_admin, AdminAuthRequired
 from app.admin.routes import router as admin_router
 
 settings = get_settings()
@@ -56,6 +57,11 @@ app.include_router(posts_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
+
+
+@app.exception_handler(AdminAuthRequired)
+async def admin_auth_redirect(request: Request, _exc: AdminAuthRequired):
+    return RedirectResponse(url="/admin/login", status_code=303)
 
 
 @app.get("/health")

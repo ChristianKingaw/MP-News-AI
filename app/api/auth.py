@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -12,6 +12,10 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 from app.models.audit import AuditLog, AuditAction
+
+
+class AdminAuthRequired(Exception):
+    """Raised when admin authentication is required; triggers redirect to login."""
 
 settings = get_settings()
 
@@ -79,6 +83,37 @@ def require_role(*roles: str):
         return current_user
 
     return role_checker
+
+
+def _decode_admin_cookie(request: Request) -> str | None:
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
+async def get_admin_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    username = _decode_admin_cookie(request)
+    if not username:
+        return None
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        return None
+    return user
+
+
+async def require_admin_auth(current_user: User | None = Depends(get_admin_user)) -> User:
+    if not current_user:
+        raise AdminAuthRequired()
+    return current_user
 
 
 async def log_audit(

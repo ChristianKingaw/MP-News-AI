@@ -1,56 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Facebook Posts — MP Disaster Alert{% endblock %}
+{% block title %}Facebook Posts - MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>Facebook Posts</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">Facebook Posts</h1>
+        <p class="page-subtitle">Review and approve posts before publishing</p>
+    </div>
+</header>
 
-<table>
-    <thead>
-        <tr>
-            <th>Caption</th>
-            <th>Image</th>
-            <th>Status</th>
-            <th>FB Post ID</th>
-            <th>Published</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for post in posts %}
-        <tr>
-            <td>{{ post.caption[:100] }}{% if post.caption|length > 100 %}...{% endif %}</td>
-            <td>
-                {% if post.image_url %}
-                    <span class="badge badge-success">Generated</span>
-                {% else %}
-                    <span class="badge badge-secondary">None</span>
-                {% endif %}
-            </td>
-            <td>
-                {% set status_badges = {
-                    'draft': 'badge-secondary',
-                    'pending_review': 'badge-warning',
-                    'approved': 'badge-primary',
-                    'rejected': 'badge-danger',
-                    'published': 'badge-success',
-                    'failed': 'badge-danger',
-                } %}
-                <span class="badge {{ status_badges.get(post.status.value, 'badge-secondary') }}">
-                    {{ post.status.value }}
-                </span>
-            </td>
-            <td>{{ post.fb_post_id or '—' }}</td>
-            <td>{{ post.published_at.strftime('%Y-%m-%d %H:%M') if post.published_at else '—' }}</td>
-            <td>
-                <button class="btn btn-success btn-sm" disabled>Approve</button>
-                <button class="btn btn-danger btn-sm" disabled>Reject</button>
-            </td>
-        </tr>
+<div class="card">
+    <div class="card-body">
+        {% if posts %}
+        <table class="data-table data-table-responsive" aria-label="Facebook posts list">
+            <caption>Displaying {{ posts|length }} post(s)</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Caption</th>
+                    <th scope="col">Image</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">FB Post ID</th>
+                    <th scope="col">Published</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for post in posts %}
+                <tr>
+                    <td data-label="Caption">
+                        <span class="cell-truncate" title="{{ post.caption if post.caption else '' }}">{{ post.caption[:120] if post.caption else '\u2014' }}{% if post.caption and post.caption|length > 120 %}&hellip;{% endif %}</span>
+                    </td>
+                    <td data-label="Image">
+                        {% if post.image_url %}
+                            <span class="badge badge-success">Generated</span>
+                        {% else %}
+                            <span class="badge badge-neutral">None</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Status">
+                        {% set status_badges = {
+                            'draft': 'badge-neutral',
+                            'pending_review': 'badge-warning',
+                            'approved': 'badge-primary',
+                            'rejected': 'badge-danger',
+                            'published': 'badge-success',
+                            'failed': 'badge-danger',
+                        } %}
+                        <span class="badge {{ status_badges.get(post.status.value, 'badge-neutral') }}">
+                            {{ post.status.value }}
+                        </span>
+                    </td>
+                    <td data-label="FB Post ID" class="cell-mono">
+                        {{ post.fb_post_id or '\u2014' }}
+                    </td>
+                    <td data-label="Published" class="cell-mono">
+                        {{ post.published_at.strftime('%Y-%m-%d %H:%M') if post.published_at else '\u2014' }}
+                    </td>
+                    <td data-label="Actions">
+                        <div class="cell-actions">
+                            {% if post.status.value == 'pending_review' %}
+                            <button class="btn btn-sm btn-success" data-action="approve-post" data-post-id="{{ post.id }}">Approve</button>
+                            <button class="btn btn-sm btn-danger" data-action="reject-post" data-post-id="{{ post.id }}">Reject</button>
+                            {% elif post.status.value == 'approved' %}
+                            <span class="text-muted text-sm">Approved</span>
+                            {% elif post.status.value == 'rejected' %}
+                            <span class="text-muted text-sm">Rejected</span>
+                            {% elif post.status.value == 'published' %}
+                            <span class="text-muted text-sm">Published</span>
+                            {% elif post.status.value == 'failed' %}
+                            <span class="text-muted text-sm">Failed</span>
+                            {% else %}
+                            <span class="text-muted text-sm">Draft</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
-        <tr>
-            <td colspan="6" style="text-align:center;padding:2rem;">No posts found.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        <div class="empty-state" role="status">
+            <div class="empty-state-icon" aria-hidden="true">&#128196;</div>
+            <h3 class="empty-state-title">No posts found</h3>
+            <p class="empty-state-text">Posts will appear here after articles are processed by the system.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

@@ -1,17 +1,17 @@
 import logging
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models.news import NewsArticle, ArticleStatus
+from app.models.news import NewsArticle
 from app.models.post import FacebookPost, PostStatus
 from app.models.alert import DisasterAlert, AlertStatus
 from app.models.audit import AuditLog
 from app.models.task_log import TaskLog
 from app.models.user import User
-from app.api.auth import get_current_user, require_auth
+from app.api.auth import require_admin_auth, _decode_admin_cookie, AdminAuthRequired
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,22 @@ router = APIRouter(prefix="/admin", tags=["admin-dashboard"])
 templates = Jinja2Templates(directory="app/admin/templates")
 
 
+@router.get("/login", response_class=HTMLResponse)
+async def admin_login_page(request: Request, db: AsyncSession = Depends(get_db)):
+    username = _decode_admin_cookie(request)
+    if username:
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
+        if user and user.is_active:
+            return RedirectResponse(url="/admin", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
 @router.get("", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     total_articles = (
         await db.execute(select(func.count(NewsArticle.id)))
@@ -80,7 +91,7 @@ async def admin_dashboard(
 async def admin_posts(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     result = await db.execute(
         select(FacebookPost).order_by(FacebookPost.created_at.desc()).limit(50)
@@ -101,7 +112,7 @@ async def admin_posts(
 async def admin_news(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     result = await db.execute(
         select(NewsArticle)
@@ -124,7 +135,7 @@ async def admin_news(
 async def admin_alerts(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     result = await db.execute(
         select(DisasterAlert)
@@ -147,7 +158,7 @@ async def admin_alerts(
 async def admin_tasks(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     result = await db.execute(
         select(TaskLog)
@@ -170,7 +181,7 @@ async def admin_tasks(
 async def admin_audit_logs(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(require_admin_auth),
 ):
     result = await db.execute(
         select(AuditLog)

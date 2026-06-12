@@ -10,9 +10,8 @@ logger = logging.getLogger(__name__)
 
 RSS_FEEDS = [
     "https://www.philstar.com/rss/headlines",
-    "https://mb.com.ph/feed/",
-    "https://cnnphilippines.com/feed",
     "https://newsinfo.inquirer.net/feed",
+    "https://www.rappler.com/feed/",
 ]
 
 
@@ -24,8 +23,8 @@ class NewsAPIService:
     async def fetch_from_news_api(self) -> list[dict]:
         results: list[dict] = []
 
-        if not self.api_key:
-            logger.warning("No News API key configured. Skipping News API fetch.")
+        if not self.api_key or self.api_key == "your-news-api-key":
+            logger.info("No News API key configured. Skipping News API fetch.")
             return results
 
         try:
@@ -75,6 +74,9 @@ class NewsAPIService:
         for feed_url in RSS_FEEDS:
             try:
                 feed = feedparser.parse(feed_url)
+
+                if not feed.entries:
+                    logger.warning("RSS feed returned no entries: %s", feed_url)
 
                 for entry in feed.entries[:5]:
                     title = entry.get("title", "")

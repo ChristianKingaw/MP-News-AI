@@ -1,56 +1,79 @@
 {% extends "base.html" %}
-{% block title %}News Articles — MP Disaster Alert{% endblock %}
+{% block title %}News Articles - MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>News Articles</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">News Articles</h1>
+        <p class="page-subtitle">Disaster-related articles from all sources</p>
+    </div>
+</header>
 
-<table>
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Source</th>
-            <th>Disaster Related</th>
-            <th>Status</th>
-            <th>Fetched</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for article in articles %}
-        <tr>
-            <td>{{ article.title[:80] }}{% if article.title|length > 80 %}...{% endif %}</td>
-            <td>
-                <span class="badge badge-info">{{ article.source_type.value }}</span>
-            </td>
-            <td>
-                {% if article.is_disaster_related %}
-                    <span class="badge badge-success">Yes</span>
-                {% else %}
-                    <span class="badge badge-secondary">No</span>
-                {% endif %}
-            </td>
-            <td>
-                {% set status_badges = {
-                    'raw': 'badge-secondary',
-                    'filtered': 'badge-info',
-                    'summarized': 'badge-primary',
-                    'published': 'badge-success',
-                    'rejected': 'badge-danger',
-                } %}
-                <span class="badge {{ status_badges.get(article.status.value, 'badge-secondary') }}">
-                    {{ article.status.value }}
-                </span>
-            </td>
-            <td>{{ article.fetched_at.strftime('%Y-%m-%d %H:%M') if article.fetched_at else '—' }}</td>
-            <td>
-                <button class="btn btn-primary btn-sm" disabled>View</button>
-            </td>
-        </tr>
+<div class="card">
+    <div class="card-body">
+        {% if articles %}
+        <table class="data-table data-table-responsive" aria-label="News articles list">
+            <caption>Displaying {{ articles|length }} article(s)</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Disaster Related</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Fetched</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for article in articles %}
+                <tr>
+                    <td data-label="Title">
+                        <span class="cell-truncate" title="{{ article.title }}">{{ article.title[:100] }}{% if article.title|length > 100 %}&hellip;{% endif %}</span>
+                    </td>
+                    <td data-label="Source">
+                        <span class="badge badge-info">{{ article.source_type.value }}</span>
+                    </td>
+                    <td data-label="Disaster Related">
+                        {% if article.is_disaster_related %}
+                            <span class="badge badge-success">Yes</span>
+                        {% else %}
+                            <span class="badge badge-neutral">No</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Status">
+                        {% set status_badges = {
+                            'raw': 'badge-neutral',
+                            'filtered': 'badge-info',
+                            'classified': 'badge-info',
+                            'summarized': 'badge-primary',
+                            'published': 'badge-success',
+                            'rejected': 'badge-danger',
+                        } %}
+                        <span class="badge {{ status_badges.get(article.status.value, 'badge-neutral') }}">
+                            {{ article.status.value }}
+                        </span>
+                    </td>
+                    <td data-label="Fetched" class="cell-mono">
+                        {{ article.fetched_at.strftime('%Y-%m-%d %H:%M') if article.fetched_at else '\u2014' }}
+                    </td>
+                    <td data-label="Actions">
+                        <div class="cell-actions">
+                            {% if article.source_url %}
+                            <a href="{{ article.source_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">View Source</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
-        <tr>
-            <td colspan="6" style="text-align:center;padding:2rem;">No articles found.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        <div class="empty-state" role="status">
+            <div class="empty-state-icon" aria-hidden="true">&#128240;</div>
+            <h3 class="empty-state-title">No articles found</h3>
+            <p class="empty-state-text">Articles will appear here as the system polls external sources.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

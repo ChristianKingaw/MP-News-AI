@@ -2,40 +2,49 @@
 {% block title %}Dashboard — MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>Dashboard</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Overview of the disaster alert system</p>
+    </div>
+</header>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{ total_articles }}</div>
-        <div class="stat-label">News Articles</div>
+<section aria-label="Key metrics">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_articles }}</div>
+            <div class="stat-label">News Articles</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_posts }}</div>
+            <div class="stat-label">Total Posts</div>
+        </div>
+        <div class="stat-card stat-card--danger">
+            <div class="stat-value">{{ active_alerts }}</div>
+            <div class="stat-label">Active Alerts</div>
+        </div>
+        <div class="stat-card stat-card--warning">
+            <div class="stat-value">{{ pending_review }}</div>
+            <div class="stat-label">Pending Review</div>
+        </div>
+        <div class="stat-card stat-card--success">
+            <div class="stat-value">{{ published }}</div>
+            <div class="stat-label">Published</div>
+        </div>
+        <div class="stat-card stat-card--danger">
+            <div class="stat-value">{{ failed_count }}</div>
+            <div class="stat-label">Failed</div>
+        </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ total_posts }}</div>
-        <div class="stat-label">Total Posts</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ active_alerts }}</div>
-        <div class="stat-label">Active Alerts</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ pending_review }}</div>
-        <div class="stat-label">Pending Review</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ published }}</div>
-        <div class="stat-label">Published</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ failed_count }}</div>
-        <div class="stat-label">Failed</div>
-    </div>
-</div>
+</section>
 
-<div class="section-title">Quick Actions</div>
-<div style="display:flex;gap:1rem;">
-    <a href="/admin/posts" class="btn btn-primary">Review Posts</a>
-    <a href="/admin/news" class="btn btn-info">View News</a>
-    <a href="/admin/alerts" class="btn btn-warning">Manage Alerts</a>
-    <a href="/docs" class="btn btn-secondary">API Documentation</a>
-</div>
+<section aria-label="Quick actions">
+    <h2 class="page-title" style="font-size: 1rem; margin-bottom: var(--space-3);">Quick Actions</h2>
+    <div class="quick-actions">
+        <a href="/admin/posts" class="btn btn-primary">Review Posts</a>
+        <a href="/admin/news" class="btn btn-outline">View News</a>
+        <a href="/admin/alerts" class="btn btn-outline">Manage Alerts</a>
+        <a href="/docs" class="btn btn-ghost">API Documentation</a>
+    </div>
+</section>
 {% endblock %}

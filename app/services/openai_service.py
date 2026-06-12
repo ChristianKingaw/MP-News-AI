@@ -1,6 +1,4 @@
 import logging
-import base64
-import os
 from pathlib import Path
 from openai import OpenAI
 from app.config import get_settings
@@ -16,16 +14,16 @@ class OpenAIService:
     def __init__(self):
         self.client = OpenAI(
             api_key=settings.OPENAI_API_KEY,
-            organization=settings.OPENAI_ORG_ID or None,
+            base_url=settings.OPENAI_BASE_URL,
         )
-        self.model = "gpt-4o-mini"
+        self.model = settings.TEXT_MODEL
         self.image_model = settings.IMAGE_MODEL
 
     async def summarize_article(self, title: str, content: str) -> str:
         try:
             prompt = (
                 "You are a disaster alert assistant for Mountain Province, Philippines. "
-                "Summarize the following disaster-related news in 2–3 sentences. "
+                "Summarize the following disaster-related news in 2-3 sentences. "
                 "Use clear and simple language suitable for public alerts. "
                 "Include the most critical safety information if available.\n\n"
                 f"TITLE: {title}\n\nCONTENT: {content[:3000]}"
@@ -46,7 +44,7 @@ class OpenAIService:
 
             return response.choices[0].message.content or ""
         except Exception as e:
-            logger.exception("OpenAI summarization failed: %s", e)
+            logger.exception("LLM summarization failed: %s", e)
             return ""
 
     async def generate_caption(
@@ -79,10 +77,14 @@ class OpenAIService:
 
             return response.choices[0].message.content or ""
         except Exception as e:
-            logger.exception("OpenAI caption generation failed: %s", e)
+            logger.exception("LLM caption generation failed: %s", e)
             return ""
 
     async def generate_image(self, prompt: str) -> tuple[str | None, str | None]:
+        if not self.image_model:
+            logger.info("No image model configured, skipping image generation")
+            return None, None
+
         try:
             response = self.client.images.generate(
                 model=self.image_model,
@@ -97,10 +99,13 @@ class OpenAIService:
 
             return image_url, local_path
         except Exception as e:
-            logger.exception("OpenAI image generation failed: %s", e)
+            logger.warning("Image generation failed (will post text-only): %s", e)
             return None, None
 
     async def generate_image_prompt(self, caption: str) -> str:
+        if not self.image_model:
+            return ""
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -108,7 +113,7 @@ class OpenAIService:
                     {
                         "role": "system",
                         "content": (
-                            "You generate concise DALL-E prompts for disaster awareness images. "
+                            "You generate concise image generation prompts for disaster awareness images. "
                             "Create prompts that are vivid, suitable for news/social media, "
                             "and avoid graphic violence. Focus on safety, preparedness, "
                             "and community resilience. Include 'Philippines mountains landscape' "
@@ -117,7 +122,7 @@ class OpenAIService:
                     },
                     {
                         "role": "user",
-                        "content": f"Create a DALL-E image prompt for this disaster alert caption:\n{caption[:500]}",
+                        "content": f"Create an image prompt for this disaster alert caption:\n{caption[:500]}",
                     },
                 ],
                 max_tokens=200,
@@ -125,20 +130,19 @@ class OpenAIService:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
-            logger.exception("Image prompt generation failed: %s", e)
+            logger.warning("Image prompt generation failed: %s", e)
             return ""
 
     async def _download_image(self, url: str | None) -> str | None:
         if not url:
             return None
         try:
+            import uuid
             import httpx
 
             async with httpx.AsyncClient(timeout=45.0) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
-
-                import uuid
 
                 filename = f"disaster_alert_{uuid.uuid4().hex[:12]}.png"
                 filepath = STATIC_IMAGES_DIR / filename
@@ -146,7 +150,7 @@ class OpenAIService:
 
                 return str(filepath)
         except Exception as e:
-            logger.exception("OpenAI image download failed: %s", e)
+            logger.exception("Image download failed: %s", e)
             return None
 
 

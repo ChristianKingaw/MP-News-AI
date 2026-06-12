@@ -1,57 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Disaster Alerts — MP Disaster Alert{% endblock %}
+{% block title %}Disaster Alerts - MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>Disaster Alerts</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">Disaster Alerts</h1>
+        <p class="page-subtitle">Active and resolved disaster alerts for Mountain Province</p>
+    </div>
+</header>
 
-<table>
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Severity</th>
-            <th>Location</th>
-            <th>Status</th>
-            <th>Reported</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for alert in alerts %}
-        <tr>
-            <td>{{ alert.title[:80] }}{% if alert.title|length > 80 %}...{% endif %}</td>
-            <td>
-                <span class="badge badge-info">{{ alert.alert_type.value }}</span>
-            </td>
-            <td>
-                {% set severity_badges = {
-                    'info': 'badge-info',
-                    'advisory': 'badge-primary',
-                    'watch': 'badge-warning',
-                    'warning': 'badge-warning',
-                    'critical': 'badge-danger',
-                } %}
-                <span class="badge {{ severity_badges.get(alert.severity.value, 'badge-secondary') }}">
-                    {{ alert.severity.value }}
-                </span>
-            </td>
-            <td>{{ alert.location or '—' }}</td>
-            <td>
-                {% set alert_status_badges = {
-                    'active': 'badge-danger',
-                    'resolved': 'badge-success',
-                    'archived': 'badge-secondary',
-                } %}
-                <span class="badge {{ alert_status_badges.get(alert.status.value, 'badge-secondary') }}">
-                    {{ alert.status.value }}
-                </span>
-            </td>
-            <td>{{ alert.reported_at.strftime('%Y-%m-%d %H:%M') if alert.reported_at else '—' }}</td>
-        </tr>
+<div class="card">
+    <div class="card-body">
+        {% if alerts %}
+        <table class="data-table data-table-responsive" aria-label="Disaster alerts list">
+            <caption>Displaying {{ alerts|length }} alert(s)</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Severity</th>
+                    <th scope="col">Location</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Reported</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr>
+                    <td data-label="Title">
+                        <span class="cell-truncate" title="{{ alert.title }}">{{ alert.title[:100] }}{% if alert.title|length > 100 %}&hellip;{% endif %}</span>
+                    </td>
+                    <td data-label="Type">
+                        <span class="badge badge-info">{{ alert.alert_type.value }}</span>
+                    </td>
+                    <td data-label="Severity">
+                        {% set severity_badges = {
+                            'info': 'badge-info',
+                            'advisory': 'badge-primary',
+                            'watch': 'badge-warning',
+                            'warning': 'badge-warning',
+                            'critical': 'badge-danger',
+                        } %}
+                        <span class="badge {{ severity_badges.get(alert.severity.value, 'badge-neutral') }}">
+                            {{ alert.severity.value }}
+                        </span>
+                    </td>
+                    <td data-label="Location">{{ alert.location or '\u2014' }}</td>
+                    <td data-label="Status">
+                        {% set alert_status_badges = {
+                            'active': 'badge-danger',
+                            'resolved': 'badge-success',
+                            'archived': 'badge-neutral',
+                        } %}
+                        <span class="badge {{ alert_status_badges.get(alert.status.value, 'badge-neutral') }}">
+                            {{ alert.status.value }}
+                        </span>
+                    </td>
+                    <td data-label="Reported" class="cell-mono">
+                        {{ alert.reported_at.strftime('%Y-%m-%d %H:%M') if alert.reported_at else '\u2014' }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
-        <tr>
-            <td colspan="6" style="text-align:center;padding:2rem;">No alerts found.</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        <div class="empty-state" role="status">
+            <div class="empty-state-icon" aria-hidden="true">&#9888;</div>
+            <h3 class="empty-state-title">No alerts found</h3>
+            <p class="empty-state-text">Alerts will appear here when disasters are detected or reported.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

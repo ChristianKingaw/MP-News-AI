@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — MP Disaster Alert</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="login-page">
+    <main id="main-content" class="login-card">
+        <div class="login-header">
+            <h1>MP Disaster Alert</h1>
+            <p>Sign in to the admin dashboard</p>
+        </div>
+
+        <div class="login-error" id="login-error" role="alert"></div>
+
+        <form id="login-form" novalidate>
+            <div class="form-group">
+                <label for="login-username" class="form-label">Username</label>
+                <input
+                    type="text"
+                    id="login-username"
+                    class="form-input"
+                    placeholder="Enter your username"
+                    autocomplete="username"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="login-password" class="form-label">Password</label>
+                <input
+                    type="password"
+                    id="login-password"
+                    class="form-input"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <button
+                type="submit"
+                id="login-submit"
+                class="btn btn-primary btn-block"
+            >
+                Sign In
+            </button>
+        </form>
+    </main>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

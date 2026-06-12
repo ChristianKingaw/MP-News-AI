@@ -1,43 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Task Logs — MP Disaster Alert{% endblock %}
+{% block title %}Task Logs - MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>Celery Task Logs</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">Celery Task Logs</h1>
+        <p class="page-subtitle">Execution history of scheduled background tasks</p>
+    </div>
+</header>
 
-{% if tasks %}
-<table class="data-table">
-    <thead>
-        <tr>
-            <th>Task Name</th>
-            <th>Status</th>
-            <th>Started</th>
-            <th>Finished</th>
-            <th>Items</th>
-            <th>Error</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for t in tasks %}
-        <tr>
-            <td>{{ t.task_name }}</td>
-            <td>
-                {% if t.status.value == 'success' %}
-                <span class="badge badge-success">Success</span>
-                {% elif t.status.value == 'failed' %}
-                <span class="badge badge-danger">Failed</span>
-                {% else %}
-                <span class="badge badge-info">{{ t.status.value }}</span>
-                {% endif %}
-            </td>
-            <td>{{ t.started_at.strftime('%Y-%m-%d %H:%M') if t.started_at else '-' }}</td>
-            <td>{{ t.finished_at.strftime('%Y-%m-%d %H:%M') if t.finished_at else '-' }}</td>
-            <td>{{ t.items_processed }}</td>
-            <td>{{ t.error_message or '-' }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No task logs yet. Tasks will appear here as Celery beat runs scheduled jobs.</p>
-{% endif %}
+<div class="card">
+    <div class="card-body">
+        {% if tasks %}
+        <table class="data-table data-table-responsive" aria-label="Task execution logs">
+            <caption>Displaying {{ tasks|length }} task log(s)</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Task Name</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Started</th>
+                    <th scope="col">Finished</th>
+                    <th scope="col">Items Processed</th>
+                    <th scope="col">Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr>
+                    <td data-label="Task Name">{{ t.task_name }}</td>
+                    <td data-label="Status">
+                        {% if t.status.value == 'success' %}
+                        <span class="badge badge-success">Success</span>
+                        {% elif t.status.value == 'failed' %}
+                        <span class="badge badge-danger">Failed</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ t.status.value }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Started" class="cell-mono">
+                        {{ t.started_at.strftime('%Y-%m-%d %H:%M') if t.started_at else '\u2014' }}
+                    </td>
+                    <td data-label="Finished" class="cell-mono">
+                        {{ t.finished_at.strftime('%Y-%m-%d %H:%M') if t.finished_at else '\u2014' }}
+                    </td>
+                    <td data-label="Items Processed">{{ t.items_processed }}</td>
+                    <td data-label="Error">
+                        {% if t.error_message %}
+                        <span class="cell-truncate text-sm" title="{{ t.error_message }}">{{ t.error_message[:80] }}{% if t.error_message|length > 80 %}&hellip;{% endif %}</span>
+                        {% else %}
+                        <span class="text-muted">\u2014</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" role="status">
+            <div class="empty-state-icon" aria-hidden="true">&#9881;</div>
+            <h3 class="empty-state-title">No task logs yet</h3>
+            <p class="empty-state-text">Tasks will appear here as Celery beat runs scheduled jobs.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

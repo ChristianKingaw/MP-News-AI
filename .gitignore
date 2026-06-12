@@ -8,6 +8,11 @@ __pycache__/
 .env.local
 .env.production
 
+# Virtual environment
+venv/
+.venv/
+env/
+
 # IDE
 .vscode/
 .idea/
@@ -30,6 +35,16 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Database / Dumps
+*.sql
+*.dump
+*.sql.gz
+pgdata/
 
 # others
 .ARCHITECTURE.md

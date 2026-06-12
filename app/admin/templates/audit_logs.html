@@ -1,43 +1,69 @@
 {% extends "base.html" %}
-{% block title %}Audit Logs — MP Disaster Alert{% endblock %}
+{% block title %}Audit Logs - MP Disaster Alert{% endblock %}
 
 {% block content %}
-<h2>Audit Logs</h2>
+<header class="page-header">
+    <div>
+        <h1 class="page-title">Audit Logs</h1>
+        <p class="page-subtitle">Record of administrative actions</p>
+    </div>
+</header>
 
-{% if logs %}
-<table class="data-table">
-    <thead>
-        <tr>
-            <th>Action</th>
-            <th>Entity Type</th>
-            <th>Entity ID</th>
-            <th>Performed By</th>
-            <th>Details</th>
-            <th>Timestamp</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for log in logs %}
-        <tr>
-            <td>
-                {% if log.action.value in ('approved_post', 'published_post') %}
-                <span class="badge badge-success">{{ log.action.value }}</span>
-                {% elif log.action.value in ('rejected_post', 'rejected_article') %}
-                <span class="badge badge-danger">{{ log.action.value }}</span>
-                {% else %}
-                <span class="badge badge-info">{{ log.action.value }}</span>
-                {% endif %}
-            </td>
-            <td>{{ log.entity_type }}</td>
-            <td>{{ log.entity_id or '-' }}</td>
-            <td>{{ log.performed_by }}</td>
-            <td>{{ log.details or '-' }}</td>
-            <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No audit logs yet. Administrative actions will be recorded here.</p>
-{% endif %}
+<div class="card">
+    <div class="card-body">
+        {% if logs %}
+        <table class="data-table data-table-responsive" aria-label="Audit log entries">
+            <caption>Displaying {{ logs|length }} audit log(s)</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Action</th>
+                    <th scope="col">Entity Type</th>
+                    <th scope="col">Entity ID</th>
+                    <th scope="col">Performed By</th>
+                    <th scope="col">Details</th>
+                    <th scope="col">Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td data-label="Action">
+                        {% if log.action.value in ('approved_post', 'published_post') %}
+                        <span class="badge badge-success">{{ log.action.value }}</span>
+                        {% elif log.action.value in ('rejected_post', 'rejected_article') %}
+                        <span class="badge badge-danger">{{ log.action.value }}</span>
+                        {% elif log.action.value in ('user_login', 'user_logout') %}
+                        <span class="badge badge-info">{{ log.action.value }}</span>
+                        {% else %}
+                        <span class="badge badge-neutral">{{ log.action.value }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Entity Type">{{ log.entity_type }}</td>
+                    <td data-label="Entity ID" class="cell-mono">
+                        <span class="cell-truncate">{{ log.entity_id or '\u2014' }}</span>
+                    </td>
+                    <td data-label="Performed By">{{ log.performed_by }}</td>
+                    <td data-label="Details">
+                        {% if log.details %}
+                        <span class="cell-truncate text-sm" title="{{ log.details }}">{{ log.details[:60] }}{% if log.details|length > 60 %}&hellip;{% endif %}</span>
+                        {% else %}
+                        <span class="text-muted">\u2014</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Timestamp" class="cell-mono">
+                        {{ log.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" role="status">
+            <div class="empty-state-icon" aria-hidden="true">&#128269;</div>
+            <h3 class="empty-state-title">No audit logs yet</h3>
+            <p class="empty-state-text">Administrative actions will be recorded here.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}
