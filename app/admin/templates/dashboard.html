@@ -12,39 +12,58 @@
 <section aria-label="Key metrics">
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-value">{{ total_articles }}</div>
             <div class="stat-label">News Articles</div>
+            <div class="stat-value">{{ total_articles }}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{{ total_posts }}</div>
             <div class="stat-label">Total Posts</div>
+            <div class="stat-value">{{ total_posts }}</div>
         </div>
-        <div class="stat-card stat-card--danger">
-            <div class="stat-value">{{ active_alerts }}</div>
+        <div class="stat-card">
             <div class="stat-label">Active Alerts</div>
+            <div class="stat-value">{{ active_alerts }}</div>
         </div>
-        <div class="stat-card stat-card--warning">
-            <div class="stat-value">{{ pending_review }}</div>
+        <div class="stat-card">
             <div class="stat-label">Pending Review</div>
+            <div class="stat-value">{{ pending_review }}</div>
         </div>
-        <div class="stat-card stat-card--success">
-            <div class="stat-value">{{ published }}</div>
+        <div class="stat-card">
             <div class="stat-label">Published</div>
+            <div class="stat-value">{{ published }}</div>
         </div>
-        <div class="stat-card stat-card--danger">
-            <div class="stat-value">{{ failed_count }}</div>
+        <div class="stat-card">
             <div class="stat-label">Failed</div>
+            <div class="stat-value">{{ failed_count }}</div>
         </div>
     </div>
 </section>
 
-<section aria-label="Quick actions">
-    <h2 class="page-title" style="font-size: 1rem; margin-bottom: var(--space-3);">Quick Actions</h2>
+<section aria-label="Charts" class="mb-8">
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-card-header">Alerts by Type</div>
+            <canvas id="chart-alerts" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header">Post Status Distribution</div>
+            <canvas id="chart-posts" height="260"></canvas>
+        </div>
+    </div>
+    <div class="charts-grid charts-grid--full" style="margin-bottom:0;margin-top:var(--space-4)">
+        <div class="chart-card">
+            <div class="chart-card-header">Articles by Source</div>
+            <canvas id="chart-sources" height="200"></canvas>
+        </div>
+    </div>
+</section>
+
+<section aria-label="Quick actions" class="mb-8">
+    <h2 style="font-size:0.9375rem;font-weight:700;color:var(--text-primary);margin-bottom:var(--space-3);letter-spacing:-0.01em">Quick Actions</h2>
     <div class="quick-actions">
         <a href="/admin/posts" class="btn btn-primary">Review Posts</a>
         <a href="/admin/news" class="btn btn-outline">View News</a>
         <a href="/admin/alerts" class="btn btn-outline">Manage Alerts</a>
-        <a href="/docs" class="btn btn-ghost">API Documentation</a>
+        <a href="/docs" target="_blank" class="btn btn-ghost">API Documentation</a>
     </div>
 </section>
 {% endblock %}

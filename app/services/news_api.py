@@ -172,7 +172,12 @@ class NewsAPIService:
                     combined_text = f"{title} {summary_clean}"
 
                     if self.is_disaster_related(combined_text):
-                        image_url = self._extract_rss_image(entry)
+                        content_html = ""
+                        content_list = entry.get("content", [])
+                        if content_list:
+                            content_html = content_list[0].get("value", "") or ""
+
+                        image_url = self._extract_rss_image(entry, summary_text, content_html)
                         results.append({
                             "source_type": "rss_feed",
                             "source_url": link,
@@ -198,10 +203,10 @@ class NewsAPIService:
         matched = [kw for kw in self.keywords if kw in text_lower]
         return ",".join(matched) if matched else ""
 
-    def _extract_rss_image(self, entry) -> str | None:
+    def _extract_rss_image(self, entry, summary_html: str = "", content_html: str = "") -> str | None:
         media_content = entry.get("media_content", [])
         for media in media_content:
-            if media.get("type", "").startswith("image/"):
+            if media.get("type", "").startswith("image/") or media.get("medium") == "image":
                 return media.get("url")
 
         media_thumbnail = entry.get("media_thumbnail", [])
@@ -217,6 +222,16 @@ class NewsAPIService:
         for enc in enclosures:
             if enc.get("type", "").startswith("image/"):
                 return enc.get("href")
+
+        for html_source in (summary_html, content_html):
+            if html_source:
+                try:
+                    soup = BeautifulSoup(html_source, "lxml")
+                    img = soup.find("img")
+                    if img and img.get("src"):
+                        return img["src"]
+                except Exception:
+                    pass
 
         return None
 

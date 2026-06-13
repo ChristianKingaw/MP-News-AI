@@ -161,6 +161,7 @@ def retry_failed_posts_task():
 def process_article_task(article_id: str):
     from app.database import async_session_factory
     from app.services.alert_service import process_article_workflow
+    from app.services.facebook_service import facebook_service
 
     async def _process():
         async with async_session_factory() as db:
@@ -168,6 +169,20 @@ def process_article_task(article_id: str):
                 post = await process_article_workflow(db, article_id)
                 if post:
                     logger.info("Processed article %s -> post %s", article_id, post.id)
+                    publish_result = await facebook_service.publish_post(
+                        post.caption, post.image_path
+                    )
+                    if publish_result["error"]:
+                        post.retry_count = 1
+                        post.last_error = publish_result["error"]
+                        logger.warning("Publish failed for post %s: %s", post.id, publish_result["error"])
+                    else:
+                        post.status = post.status.__class__.PUBLISHED
+                        post.fb_post_id = publish_result["fb_post_id"]
+                        post.fb_post_url = publish_result["fb_post_url"]
+                        post.published_at = datetime.now(timezone.utc)
+                        logger.info("Published post %s -> FB %s", post.id, post.fb_post_id)
+                    db.add(post)
                 await db.commit()
             except Exception as e:
                 logger.exception("Article processing failed: %s", e)

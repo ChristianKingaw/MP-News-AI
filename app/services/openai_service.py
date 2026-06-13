@@ -1,4 +1,5 @@
 import logging
+import httpx
 from pathlib import Path
 from openai import OpenAI
 from app.config import get_settings
@@ -141,10 +142,20 @@ class OpenAIService:
             return ""
 
     async def generate_image(self, prompt: str) -> tuple[str | None, str | None]:
-        if not self.image_model or not self.image_client:
-            logger.info("No image model configured, skipping image generation")
-            return None, None
+        if self.image_model and self.image_client:
+            dalle_url, dalle_path = await self._generate_via_dalle(prompt)
+            if dalle_url:
+                return dalle_url, dalle_path
 
+        hf_url, hf_path = await self._generate_via_huggingface(prompt)
+        if hf_path:
+            return hf_url, hf_path
+
+        return None, None
+
+    async def _generate_via_dalle(self, prompt: str) -> tuple[str | None, str | None]:
+        if not self.image_model or not self.image_client:
+            return None, None
         try:
             response = self.image_client.images.generate(
                 model=self.image_model,
@@ -153,19 +164,62 @@ class OpenAIService:
                 quality="standard",
                 n=1,
             )
-
             image_url = response.data[0].url
             local_path = await self._download_image(image_url)
-
             return image_url, local_path
         except Exception as e:
-            logger.warning("Image generation failed (will post text-only): %s", e)
+            logger.warning("DALL-E generation failed: %s", e)
             return None, None
 
-    async def generate_image_prompt(self, caption: str) -> str:
-        if not self.image_model:
-            return ""
+    async def _generate_via_huggingface(self, prompt: str) -> tuple[str | None, str | None]:
+        if not settings.HUGGINGFACE_API_TOKEN:
+            logger.info("No Hugging Face token configured, skipping HF image generation")
+            return None, None
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+                    json={"inputs": prompt},
+                    headers={
+                        "Authorization": f"Bearer {settings.HUGGINGFACE_API_TOKEN}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code >= 400:
+                    logger.warning("Hugging Face API returned %d: %s", resp.status_code, resp.text[:200])
+                    return None, None
+                if resp.headers.get("content-type", "").startswith("image/"):
+                    local_path = await self._save_image_bytes(resp.content, resp.headers.get("content-type", ""))
+                    return None, local_path
+                if resp.status_code == 200 and b"error" in resp.content[:100]:
+                    logger.warning("Hugging Face model loading, will retry next cycle")
+                    return None, None
+                logger.warning("Hugging Face unexpected response: %s", resp.text[:200])
+                return None, None
+        except Exception as e:
+            logger.warning("Hugging Face image generation failed: %s", e)
+            return None, None
 
+    async def _save_image_bytes(self, image_bytes: bytes, content_type: str = "") -> str | None:
+        try:
+            import uuid
+            if "jpeg" in content_type or "jpg" in content_type:
+                ext = "jpg"
+            elif "png" in content_type:
+                ext = "png"
+            elif "webp" in content_type:
+                ext = "webp"
+            else:
+                ext = "png"
+            filename = f"hf_disaster_alert_{uuid.uuid4().hex[:12]}.{ext}"
+            filepath = STATIC_IMAGES_DIR / filename
+            filepath.write_bytes(image_bytes)
+            return str(filepath)
+        except Exception as e:
+            logger.exception("Failed to save HF image: %s", e)
+            return None
+
+    async def generate_image_prompt(self, caption: str) -> str:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,

@@ -196,24 +196,32 @@ async def process_article_workflow(
 
     alert_type = detect_alert_type(article.title, article.content)
 
-    source_published_str = None
-    if article.source_published_at:
-        source_published_str = article.source_published_at.strftime("%B %d, %Y at %I:%M %p")
+    if article.source_type == SourceType.RSS_FEED:
+        body = summary or article.content[:800]
+        caption_parts = [article.title]
+        caption_parts.append(body)
+        if article.source_url:
+            caption_parts.append(f"Read more: {article.source_url}")
+        caption = "\n\n".join(caption_parts)
+        image_url, image_path, image_prompt = await _capture_or_generate_image(article, caption)
+    else:
+        source_published_str = None
+        if article.source_published_at:
+            source_published_str = article.source_published_at.strftime("%B %d, %Y at %I:%M %p")
 
-    weather_meta = None
-    if article.source_type == SourceType.WEATHER:
-        weather_meta = _parse_weather_metadata(article.title, article.content)
+        weather_meta = None
+        if article.source_type == SourceType.WEATHER:
+            weather_meta = _parse_weather_metadata(article.title, article.content)
 
-    caption = await openai_service.generate_caption(
-        article.title, summary or article.content,
-        alert_type=alert_type,
-        affected_location=article.affected_location,
-        source_published_at=source_published_str,
-        source_type=article.source_type.value if article.source_type else "",
-        weather_metadata=weather_meta,
-    )
-
-    image_url, image_path, image_prompt = await _capture_or_generate_image(article, caption)
+        caption = await openai_service.generate_caption(
+            article.title, summary or article.content,
+            alert_type=alert_type,
+            affected_location=article.affected_location,
+            source_published_at=source_published_str,
+            source_type=article.source_type.value if article.source_type else "",
+            weather_metadata=weather_meta,
+        )
+        image_url, image_path, image_prompt = await _capture_or_generate_image(article, caption)
 
     post = FacebookPost(
         article_id=article.id,

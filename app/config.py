@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     IMAGE_MODEL: str = ""
     IMAGE_API_KEY: str = ""
     IMAGE_BASE_URL: str = "https://api.openai.com/v1"
+    HUGGINGFACE_API_TOKEN: str = ""
 
     FACEBOOK_PAGE_ID: str
     FACEBOOK_PAGE_ACCESS_TOKEN: str

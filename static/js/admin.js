@@ -1,6 +1,6 @@
 /**
- * Mountain Province Disaster Alert — Admin Dashboard JavaScript
- * Vanilla JS — no framework dependencies
+ * Mountain Province Disaster Alert — Modern Admin Dashboard
+ * Vanilla JS — Dark mode · Sidebar · Charts · Toast · Dialogs
  */
 
 (function () {
@@ -56,6 +56,267 @@
 
   function isLoggedIn() {
     return !!getAccessToken();
+  }
+
+  /* ==========================================================
+     Dark Mode Toggle
+     ========================================================== */
+
+  function initTheme() {
+    const saved = localStorage.getItem('mp-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = saved || (prefersDark ? 'dark' : 'light');
+    applyTheme(theme);
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('mp-theme', theme);
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+    updateChartColors();
+  }
+
+  function initThemeToggle() {
+    const btn = $('#theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', toggleTheme);
+  }
+
+  /* ==========================================================
+     Sidebar Logic
+     ========================================================== */
+
+  function initSidebar() {
+    const sidebar = $('#sidebar');
+    const toggleBtn = $('#sidebar-toggle');
+    const mobileBtn = $('#mobile-menu-btn');
+    const overlay = $('#sidebar-overlay');
+
+    if (!sidebar) return;
+
+    const saved = localStorage.getItem('mp-sidebar-collapsed');
+
+    if (saved === 'true' && window.innerWidth >= 768) {
+      sidebar.classList.add('is-collapsed');
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('is-collapsed');
+        localStorage.setItem(
+          'mp-sidebar-collapsed',
+          sidebar.classList.contains('is-collapsed')
+        );
+        updateChartCanvasSize();
+      });
+    }
+
+    function openMobile() {
+      sidebar.classList.add('is-open');
+      if (overlay) overlay.classList.add('is-visible');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeMobile() {
+      sidebar.classList.remove('is-open');
+      if (overlay) overlay.classList.remove('is-visible');
+      document.body.style.overflow = '';
+    }
+
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', openMobile);
+    }
+
+    if (overlay) {
+      overlay.addEventListener('click', closeMobile);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sidebar.classList.contains('is-open')) {
+        closeMobile();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        closeMobile();
+      }
+    });
+  }
+
+  function updateChartCanvasSize() {
+    $$('canvas[id^="chart-"]').forEach((canvas) => {
+      const chart = Chart.getChart(canvas);
+      if (chart) setTimeout(() => chart.resize(), 300);
+    });
+  }
+
+  function updateChartColors() {
+    $$('canvas[id^="chart-"]').forEach((canvas) => {
+      const chart = Chart.getChart(canvas);
+      if (chart) {
+        chart.destroy();
+        loadDashboardCharts(true);
+      }
+    });
+  }
+
+  /* ==========================================================
+     Chart.js Dashboard
+     ========================================================== */
+
+  function getChartColors() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return {
+      text: isDark ? '#94a3b8' : '#64748b',
+      grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    };
+  }
+
+  async function loadDashboardCharts(forceReload) {
+    const alertCanvas = $('#chart-alerts');
+    if (!alertCanvas) return;
+
+    if (!forceReload && Chart.getChart(alertCanvas)) return;
+
+    const url =
+      forceReload && window._chartDataCache
+        ? Promise.resolve(window._chartDataCache)
+        : apiFetch('/admin/api/dashboard-stats').then((d) => {
+            window._chartDataCache = d;
+            return d;
+          }).catch(() => null);
+
+    const data = await url;
+    if (!data) return;
+
+    const colors = getChartColors();
+
+    Chart.defaults.color = colors.text;
+    Chart.defaults.borderColor = colors.grid;
+    Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+
+    renderAlertsByType(data.alerts_by_type || {}, colors);
+    renderPostStatus(data.posts_by_status || {}, colors);
+    renderArticlesBySource(data.articles_by_source || {}, colors);
+  }
+
+  function renderAlertsByType(alertTypes, colors) {
+    const canvas = $('#chart-alerts');
+    if (!canvas) return;
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    const labels = Object.keys(alertTypes);
+    const values = Object.values(alertTypes);
+    const bgColors = [
+      'rgba(239,68,68,0.7)', 'rgba(59,130,246,0.7)',
+      'rgba(16,185,129,0.7)', 'rgba(245,158,11,0.7)',
+      'rgba(139,92,246,0.7)', 'rgba(6,182,212,0.7)',
+      'rgba(148,163,184,0.7)',
+    ];
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels.length ? labels : ['No data'],
+        datasets: [{
+          data: values.length ? values : [0],
+          backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
+          borderRadius: 8,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } } },
+        },
+      },
+    });
+  }
+
+  function renderPostStatus(postStatuses, colors) {
+    const canvas = $('#chart-posts');
+    if (!canvas) return;
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    const labels = Object.keys(postStatuses);
+    const values = Object.values(postStatuses);
+    const bgColors = [
+      'rgba(16,185,129,0.75)', 'rgba(245,158,11,0.75)',
+      'rgba(79,70,229,0.75)', 'rgba(239,68,68,0.75)',
+      'rgba(148,163,184,0.75)', 'rgba(139,92,246,0.75)',
+    ];
+
+    new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: labels.length ? labels : ['No data'],
+        datasets: [{
+          data: values.length ? values : [1],
+          backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 16, usePointStyle: true, pointStyleWidth: 8, font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+
+  function renderArticlesBySource(sources, colors) {
+    const canvas = $('#chart-sources');
+    if (!canvas) return;
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    const labels = Object.keys(sources);
+    const values = Object.values(sources);
+    const bgColors = [
+      'rgba(79,70,229,0.7)', 'rgba(6,182,212,0.7)',
+      'rgba(16,185,129,0.7)', 'rgba(245,158,11,0.7)',
+      'rgba(139,92,246,0.7)', 'rgba(236,72,153,0.7)',
+      'rgba(148,163,184,0.7)',
+    ];
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels.length ? labels : ['No data'],
+        datasets: [{
+          data: values.length ? values : [0],
+          backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
+          borderRadius: 8,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { precision: 0, font: { size: 11 } } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        },
+      },
+    });
   }
 
   /* ==========================================================
@@ -173,48 +434,17 @@
   }
 
   /* ==========================================================
-     Mobile Navigation Toggle
-     ========================================================== */
-
-  function initMobileNav() {
-    const toggle = $('#nav-toggle');
-    const nav = $('#navbar-nav');
-
-    if (!toggle || !nav) return;
-
-    toggle.addEventListener('click', () => {
-      const isOpen = nav.classList.toggle('is-open');
-      toggle.setAttribute('aria-expanded', String(isOpen));
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!toggle.contains(e.target) && !nav.contains(e.target)) {
-        nav.classList.remove('is-open');
-        toggle.setAttribute('aria-expanded', 'false');
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && nav.classList.contains('is-open')) {
-        nav.classList.remove('is-open');
-        toggle.setAttribute('aria-expanded', 'false');
-        toggle.focus();
-      }
-    });
-  }
-
-  /* ==========================================================
      Logout
      ========================================================== */
 
   function initLogout() {
-    const btn = $('#btn-logout');
-    if (!btn) return;
-
-    btn.addEventListener('click', () => {
-      document.cookie =
-        'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict';
-      window.location.href = '/admin/login';
+    const btns = $$('#btn-logout, #btn-logout-mobile');
+    btns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.cookie =
+          'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict';
+        window.location.href = '/admin/login';
+      });
     });
   }
 
@@ -375,13 +605,35 @@
   }
 
   /* ==========================================================
+     Load Chart.js from CDN dynamically
+     ========================================================== */
+
+  function loadChartJS() {
+    const isDashboard = !!$('#chart-alerts');
+    if (!isDashboard) return;
+
+    if (window.Chart) {
+      loadDashboardCharts();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
+    script.onload = () => loadDashboardCharts();
+    document.head.appendChild(script);
+  }
+
+  /* ==========================================================
      Init
      ========================================================== */
 
   document.addEventListener('DOMContentLoaded', () => {
-    initMobileNav();
+    initTheme();
+    initThemeToggle();
+    initSidebar();
     initLogout();
     initPostActions();
     initLoginForm();
+    loadChartJS();
   });
 })();

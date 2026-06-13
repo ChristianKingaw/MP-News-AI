@@ -1,13 +1,13 @@
 import logging
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models.news import NewsArticle
+from app.models.news import NewsArticle, SourceType
 from app.models.post import FacebookPost, PostStatus
-from app.models.alert import DisasterAlert, AlertStatus
+from app.models.alert import DisasterAlert, AlertStatus, AlertType
 from app.models.audit import AuditLog
 from app.models.task_log import TaskLog
 from app.models.user import User
@@ -198,3 +198,51 @@ async def admin_audit_logs(
             "logs": logs,
         },
     )
+
+
+@router.get("/api/dashboard-stats")
+async def admin_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin_auth),
+):
+    alerts_by_type = {}
+    for t in AlertType:
+        count = (
+            await db.execute(
+                select(func.count(DisasterAlert.id)).where(
+                    DisasterAlert.alert_type == t
+                )
+            )
+        ).scalar() or 0
+        if count > 0:
+            alerts_by_type[t.value] = count
+
+    posts_by_status = {}
+    for s in PostStatus:
+        count = (
+            await db.execute(
+                select(func.count(FacebookPost.id)).where(
+                    FacebookPost.status == s
+                )
+            )
+        ).scalar() or 0
+        if count > 0:
+            posts_by_status[s.value.replace("_", " ").title()] = count
+
+    articles_by_source = {}
+    for src in SourceType:
+        count = (
+            await db.execute(
+                select(func.count(NewsArticle.id)).where(
+                    NewsArticle.source_type == src
+                )
+            )
+        ).scalar() or 0
+        if count > 0:
+            articles_by_source[src.value.replace("_", " ").title()] = count
+
+    return JSONResponse({
+        "alerts_by_type": alerts_by_type,
+        "posts_by_status": posts_by_status,
+        "articles_by_source": articles_by_source,
+    })
