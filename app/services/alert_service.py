@@ -12,6 +12,46 @@ from app.services.ai_service import ai_service
 logger = logging.getLogger(__name__)
 
 
+def _parse_weather_metadata(title: str, content: str) -> dict:
+    import re
+
+    meta: dict = {
+        "condition": "",
+        "temp": 0,
+        "is_raining": False,
+        "rain_mm": 0,
+        "forecast_rain_total": 0,
+        "is_extremely_hot": False,
+    }
+
+    temp_match = re.search(r"Temperature:\s*([\d.]+)", content)
+    if temp_match:
+        meta["temp"] = float(temp_match.group(1))
+        if meta["temp"] >= 32:
+            meta["is_extremely_hot"] = True
+
+    condition_match = re.search(r"Condition:\s*(.+?)(?:\n|$)", content)
+    if condition_match:
+        meta["condition"] = condition_match.group(1).strip()
+
+    rain_match = re.search(r"Rainfall\s*\([^)]+\):\s*([\d.]+)", content)
+    if rain_match:
+        meta["rain_mm"] = float(rain_match.group(1))
+        if meta["rain_mm"] > 0:
+            meta["is_raining"] = True
+
+    forecast_rain_match = re.search(r"Total Expected Rainfall:\s*([\d.]+)", content)
+    if forecast_rain_match:
+        meta["forecast_rain_total"] = float(forecast_rain_match.group(1))
+        if meta["forecast_rain_total"] > 0:
+            meta["is_raining"] = True
+
+    if any(w in content.lower() for w in ["rain", "thunderstorm", "drizzle", "shower"]):
+        meta["is_raining"] = True
+
+    return meta
+
+
 async def _capture_or_generate_image(article: NewsArticle, caption: str) -> tuple[str | None, str | None, str | None]:
     if article.source_image_url:
         image_path = await openai_service.download_source_image(article.source_image_url)
@@ -66,6 +106,7 @@ async def filter_and_store_article(
         keywords_matched=article_data.get("keywords_matched"),
         is_disaster_related=article_data.get("is_disaster_related", True),
         status=ArticleStatus.FILTERED,
+        source_published_at=article_data.get("source_published_at"),
     )
     db.add(article)
     await db.flush()
@@ -117,6 +158,20 @@ async def process_article_workflow(
     if not classified:
         return None
 
+    if classified.content_hash:
+        duplicate_posted = await db.execute(
+            select(NewsArticle).where(
+                NewsArticle.content_hash == classified.content_hash,
+                NewsArticle.id != classified.id,
+                NewsArticle.status.in_([ArticleStatus.SUMMARIZED, ArticleStatus.PUBLISHED]),
+            ).limit(1)
+        )
+        if duplicate_posted.scalar_one_or_none():
+            classified.status = ArticleStatus.REJECTED
+            classified.processed_at = datetime.utcnow()
+            db.add(classified)
+            return None
+
     if not classified.is_disaster_related:
         if classified.status != ArticleStatus.REJECTED:
             classified.status = ArticleStatus.REJECTED
@@ -124,10 +179,11 @@ async def process_article_workflow(
             db.add(classified)
         return None
 
-    if classified.location_relevance_score is not None and classified.location_relevance_score < 0.4:
-        if classified.status != ArticleStatus.CLASSIFIED:
-            classified.status = ArticleStatus.CLASSIFIED
-            db.add(classified)
+    if (
+        classified.source_type == SourceType.PHIVOLCS
+        and classified.location_relevance_score is not None
+        and classified.location_relevance_score < 1.0
+    ):
         return None
 
     article = classified
@@ -138,9 +194,23 @@ async def process_article_workflow(
     if summary:
         article.summary = summary
 
+    alert_type = detect_alert_type(article.title, article.content)
+
+    source_published_str = None
+    if article.source_published_at:
+        source_published_str = article.source_published_at.strftime("%B %d, %Y at %I:%M %p")
+
+    weather_meta = None
+    if article.source_type == SourceType.WEATHER:
+        weather_meta = _parse_weather_metadata(article.title, article.content)
+
     caption = await openai_service.generate_caption(
         article.title, summary or article.content,
-        affected_location=article.affected_location
+        alert_type=alert_type,
+        affected_location=article.affected_location,
+        source_published_at=source_published_str,
+        source_type=article.source_type.value if article.source_type else "",
+        weather_metadata=weather_meta,
     )
 
     image_url, image_path, image_prompt = await _capture_or_generate_image(article, caption)
@@ -172,7 +242,7 @@ async def process_pending_articles(db: AsyncSession) -> list[FacebookPost]:
             NewsArticle.status == ArticleStatus.FILTERED,
             NewsArticle.is_disaster_related == True,
         )
-        .limit(10)
+        .order_by(NewsArticle.created_at)
     )
     articles = result.scalars().all()
 
@@ -208,7 +278,6 @@ async def auto_publish_approved_posts(db: AsyncSession) -> list[FacebookPost]:
     result = await db.execute(
         select(FacebookPost).where(FacebookPost.status == PostStatus.APPROVED)
         .order_by(FacebookPost.created_at)
-        .limit(5)
     )
     posts = result.scalars().all()
 
@@ -249,7 +318,6 @@ async def retry_failed_posts(db: AsyncSession) -> list[FacebookPost]:
             FacebookPost.status == PostStatus.FAILED,
             FacebookPost.retry_count < 3,
         )
-        .limit(10)
     )
     posts = result.scalars().all()
 

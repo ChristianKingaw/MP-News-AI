@@ -1,5 +1,6 @@
 import logging
 import httpx
+from datetime import datetime, timezone
 from app.config import get_settings
 
 settings = get_settings()
@@ -90,6 +91,7 @@ class WeatherService:
                     "is_disaster_related": self._is_concerning_weather(
                         condition, wind_speed, rain, cloud_pct
                     ),
+                    "source_published_at": datetime.now(timezone.utc),
                 }]
 
         except Exception as e:
@@ -169,6 +171,7 @@ class WeatherService:
                         "content": "\n".join(content_parts),
                         "keywords_matched": matched,
                         "is_disaster_related": True,
+                        "source_published_at": datetime.now(timezone.utc),
                     })
 
                 return results

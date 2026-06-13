@@ -59,12 +59,52 @@ class OpenAIService:
 
     async def generate_caption(
         self, title: str, summary: str, alert_type: str = "general",
-        affected_location: str | None = None
+        affected_location: str | None = None,
+        source_published_at: str | None = None,
+        source_type: str = "",
+        weather_metadata: dict | None = None,
     ) -> str:
         try:
             location_note = ""
             if affected_location and affected_location != "unknown":
                 location_note = f"The affected area is: {affected_location}. "
+
+            date_note = ""
+            if source_published_at:
+                date_note = f"\nOriginal publication date: {source_published_at}. Always include this date in the caption."
+
+            weather_extra = ""
+            if source_type == "weather" and weather_metadata:
+                condition = weather_metadata.get("condition", "")
+                temp = weather_metadata.get("temp", 0)
+                is_raining = weather_metadata.get("is_raining", False)
+                rain_mm = weather_metadata.get("rain_mm", 0)
+                forecast_rain = weather_metadata.get("forecast_rain_total", 0)
+                is_extremely_hot = weather_metadata.get("is_extremely_hot", False)
+
+                weather_extra = (
+                    "\nIMPORTANT WEATHER GUIDANCE for Mountain Province, CAR:\n"
+                    f"- Current condition: {condition}, {temp}°C\n"
+                )
+                if is_raining or rain_mm > 0:
+                    weather_extra += (
+                        f"- It IS raining or will rain (rainfall: {rain_mm}mm, forecast total: {forecast_rain}mm). "
+                        "Tell residents to bring umbrellas, wear raincoats, and be cautious of slippery roads and potential landslides.\n"
+                    )
+                elif forecast_rain > 0:
+                    weather_extra += (
+                        f"- Rain is expected in the forecast (total: {forecast_rain}mm). "
+                        "Advise residents to prepare umbrellas and rain gear.\n"
+                    )
+                else:
+                    weather_extra += "- It is NOT expected to rain. Inform residents that no rain is expected.\n"
+
+                if is_extremely_hot:
+                    weather_extra += (
+                        f"- It is EXTREMELY HOT at {temp}°C. "
+                        "Warn residents to stay hydrated, carry water, avoid direct sun exposure, "
+                        "and look out for signs of heat stroke. #StayHydrated\n"
+                    )
 
             prompt = (
                 "You are managing a Facebook page for Mountain Province Disaster Alerts. "
@@ -76,7 +116,9 @@ class OpenAIService:
                 "Keep the tone professional yet approachable.\n\n"
                 f"ALERT TYPE: {alert_type}\n"
                 f"TITLE: {title}\n"
-                f"SUMMARY: {summary}\n\n"
+                f"SUMMARY: {summary}\n"
+                f"{date_note}\n"
+                f"{weather_extra}\n"
                 "Write the Facebook post caption below:"
             )
 

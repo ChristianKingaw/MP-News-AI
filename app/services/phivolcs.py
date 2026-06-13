@@ -65,6 +65,7 @@ class PHIVOLCSService:
                         continue
 
                     place = props.get("place", "Unknown location")
+                    time_ms = props.get("time")
                     title = f"M{mag} Earthquake - {place} (near Mountain Province)"
                     content = self._format_earthquake_content(props, coords)
 
@@ -75,6 +76,10 @@ class PHIVOLCSService:
                         "content": content,
                         "keywords_matched": "earthquake,lindol",
                         "is_disaster_related": True,
+                        "source_published_at": (
+                            datetime.fromtimestamp(time_ms / 1000, tz=timezone.utc)
+                            if time_ms else None
+                        ),
                     })
 
         except httpx.HTTPError as e:

@@ -1,6 +1,7 @@
 import logging
 import httpx
 import feedparser
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from app.config import get_settings
 
@@ -20,6 +21,35 @@ class NewsAPIService:
         self.api_key = settings.NEWS_API_KEY
         self.newsdata_key = settings.NEWSDATA_API_KEY
         self.keywords = settings.disaster_keywords_list
+
+    @staticmethod
+    def _parse_date(date_str: str | None) -> datetime | None:
+        if not date_str:
+            return None
+        try:
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            return dt.astimezone(timezone.utc)
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _parse_rss_date(entry) -> datetime | None:
+        published_parsed = entry.get("published_parsed")
+        if published_parsed:
+            try:
+                from time import mktime
+                ts = mktime(published_parsed)
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+            except Exception:
+                pass
+        published = entry.get("published", "")
+        if published:
+            try:
+                from email.utils import parsedate_to_datetime
+                return parsedate_to_datetime(published).astimezone(timezone.utc)
+            except Exception:
+                pass
+        return None
 
     async def fetch_from_newsdata(self) -> list[dict]:
         results: list[dict] = []
@@ -60,6 +90,7 @@ class NewsAPIService:
                                 f"{title} {description}"
                             ),
                             "is_disaster_related": True,
+                            "source_published_at": self._parse_date(article.get("pubDate")),
                         })
 
         except httpx.HTTPError as e:
@@ -112,6 +143,7 @@ class NewsAPIService:
                                 f"{title} {description}"
                             ),
                             "is_disaster_related": True,
+                            "source_published_at": self._parse_date(article.get("publishedAt")),
                         })
 
         except httpx.HTTPError as e:
@@ -149,6 +181,7 @@ class NewsAPIService:
                             "content": summary_clean or title,
                             "keywords_matched": self.get_matched_keywords(combined_text),
                             "is_disaster_related": True,
+                            "source_published_at": self._parse_rss_date(entry),
                         })
 
             except Exception as e:

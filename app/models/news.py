@@ -71,6 +71,9 @@ class NewsArticle(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    source_published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     @staticmethod
     def compute_content_hash(title: str, content: str) -> str:
