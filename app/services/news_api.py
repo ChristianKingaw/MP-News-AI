@@ -18,7 +18,56 @@ RSS_FEEDS = [
 class NewsAPIService:
     def __init__(self):
         self.api_key = settings.NEWS_API_KEY
+        self.newsdata_key = settings.NEWSDATA_API_KEY
         self.keywords = settings.disaster_keywords_list
+
+    async def fetch_from_newsdata(self) -> list[dict]:
+        results: list[dict] = []
+
+        if not self.newsdata_key or self.newsdata_key == "your-newsdata-api-key":
+            logger.info("No NewsData API key configured. Skipping NewsData fetch.")
+            return results
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    "https://newsdata.io/api/1/latest",
+                    params={
+                        "apikey": self.newsdata_key,
+                        "country": "ph",
+                        "language": "tl,en",
+                        "category": settings.NEWSDATA_CATEGORIES,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                for article in data.get("results", []):
+                    title = article.get("title", "")
+                    description = article.get("description", "")
+                    content = article.get("content", description or "")
+                    url = article.get("link", "")
+
+                    if self.is_disaster_related(f"{title} {description}"):
+                        image_url = article.get("image_url") or article.get("urlToImage")
+                        results.append({
+                            "source_type": "news_api",
+                            "source_url": url,
+                            "source_image_url": image_url,
+                            "title": title,
+                            "content": content or description,
+                            "keywords_matched": self.get_matched_keywords(
+                                f"{title} {description}"
+                            ),
+                            "is_disaster_related": True,
+                        })
+
+        except httpx.HTTPError as e:
+            logger.error("NewsData API request failed: %s", e)
+        except Exception as e:
+            logger.exception("NewsData API service error: %s", e)
+
+        return results
 
     async def fetch_from_news_api(self) -> list[dict]:
         results: list[dict] = []
@@ -50,9 +99,13 @@ class NewsAPIService:
                     url = article.get("url", "")
 
                     if self.is_disaster_related(f"{title} {description}"):
+                        image_url = (
+                            article.get("urlToImage")
+                        )
                         results.append({
                             "source_type": "news_api",
                             "source_url": url,
+                            "source_image_url": image_url,
                             "title": title,
                             "content": content or description,
                             "keywords_matched": self.get_matched_keywords(
@@ -87,9 +140,11 @@ class NewsAPIService:
                     combined_text = f"{title} {summary_clean}"
 
                     if self.is_disaster_related(combined_text):
+                        image_url = self._extract_rss_image(entry)
                         results.append({
                             "source_type": "rss_feed",
                             "source_url": link,
+                            "source_image_url": image_url,
                             "title": title,
                             "content": summary_clean or title,
                             "keywords_matched": self.get_matched_keywords(combined_text),
@@ -109,6 +164,28 @@ class NewsAPIService:
         text_lower = text.lower()
         matched = [kw for kw in self.keywords if kw in text_lower]
         return ",".join(matched) if matched else ""
+
+    def _extract_rss_image(self, entry) -> str | None:
+        media_content = entry.get("media_content", [])
+        for media in media_content:
+            if media.get("type", "").startswith("image/"):
+                return media.get("url")
+
+        media_thumbnail = entry.get("media_thumbnail", [])
+        for thumb in media_thumbnail:
+            return thumb.get("url")
+
+        links = entry.get("links", [])
+        for link in links:
+            if link.get("type", "").startswith("image/"):
+                return link.get("href")
+
+        enclosures = entry.get("enclosures", [])
+        for enc in enclosures:
+            if enc.get("type", "").startswith("image/"):
+                return enc.get("href")
+
+        return None
 
 
 news_api_service = NewsAPIService()

@@ -12,6 +12,7 @@ class SourceType(str, enum.Enum):
     PHIVOLCS = "phivolcs"
     NEWS_API = "news_api"
     RSS_FEED = "rss_feed"
+    WEATHER = "weather"
     MANUAL = "manual"
 
 
@@ -41,6 +42,7 @@ class NewsArticle(Base):
         Enum(SourceType, name="source_type_enum"), nullable=False
     )
     source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    source_image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

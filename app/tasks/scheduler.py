@@ -4,8 +4,15 @@ from datetime import datetime, timezone
 from app.tasks.celery_app import celery_app
 from app.services.phivolcs import phivolcs_service
 from app.services.news_api import news_api_service
+from app.services.weather_service import weather_service
 
 logger = logging.getLogger(__name__)
+
+_LOOP = asyncio.new_event_loop()
+asyncio.set_event_loop(_LOOP)
+
+def _run_async(coro):
+    return _LOOP.run_until_complete(coro)
 
 
 async def _poll_and_store():
@@ -43,9 +50,21 @@ async def _poll_and_store():
             for article in rss_data:
                 await filter_and_store_article(db, article)
 
+            newsdata_data = await news_api_service.fetch_from_newsdata()
+            logger.info("Fetched %d NewsData articles", len(newsdata_data))
+
+            for article in newsdata_data:
+                await filter_and_store_article(db, article)
+
+            weather_alerts = await weather_service.fetch_weather_alerts()
+            logger.info("Fetched %d weather alerts", len(weather_alerts))
+
+            for article in weather_alerts:
+                await filter_and_store_article(db, article)
+
             task_log.status = TaskStatus.SUCCESS
             task_log.finished_at = datetime.now(timezone.utc)
-            task_log.items_processed = len(phivolcs_data) + len(news_data) + len(rss_data)
+            task_log.items_processed = len(phivolcs_data) + len(news_data) + len(rss_data) + len(newsdata_data) + len(weather_alerts)
 
             await db.commit()
             logger.info("Poll cycle completed successfully")
@@ -75,7 +94,7 @@ async def _process_pending():
 
         try:
             posts = await process_pending_articles(db)
-            logger.info("Processed %d pending articles into posts", len(posts))
+            logger.info("Processed & published %d pending articles", len(posts))
 
             task_log.status = TaskStatus.SUCCESS
             task_log.finished_at = datetime.now(timezone.utc)
@@ -107,12 +126,12 @@ async def _retry_failed():
 
 @celery_app.task(name="app.tasks.scheduler.poll_external_sources")
 def poll_external_sources():
-    asyncio.run(_poll_and_store())
+    _run_async(_poll_and_store())
 
 
 @celery_app.task(name="app.tasks.scheduler.process_pending_articles")
 def process_pending_articles():
-    asyncio.run(_process_pending())
+    _run_async(_process_pending())
 
 
 @celery_app.task(name="app.tasks.scheduler.publish_approved_posts")
@@ -130,12 +149,12 @@ def publish_approved_posts():
                 logger.exception("Publish cycle failed: %s", e)
                 await db.rollback()
 
-    asyncio.run(_publish())
+    _run_async(_publish())
 
 
 @celery_app.task(name="app.tasks.scheduler.retry_failed_posts")
 def retry_failed_posts_task():
-    asyncio.run(_retry_failed())
+    _run_async(_retry_failed())
 
 
 @celery_app.task(name="app.tasks.scheduler.process_article")
@@ -154,4 +173,4 @@ def process_article_task(article_id: str):
                 logger.exception("Article processing failed: %s", e)
                 await db.rollback()
 
-    asyncio.run(_process())
+    _run_async(_process())

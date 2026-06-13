@@ -8,6 +8,7 @@ celery_app = Celery(
     "disaster_alert",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=["app.tasks.scheduler"],
 )
 
 celery_app.conf.update(
@@ -43,4 +44,4 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.autodiscover_tasks([])

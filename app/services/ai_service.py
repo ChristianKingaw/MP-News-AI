@@ -8,30 +8,16 @@ logger = logging.getLogger(__name__)
 
 GEOGRAPHIC_PRIORITY = [
     "Mountain Province",
-    "Cordillera Administrative Region",
-    "Northern Luzon",
-    "Baguio",
-    "Benguet",
-    "Ifugao",
-    "Kalinga",
-    "Abra",
-    "Apayao",
     "Bontoc",
     "Sagada",
     "Bauko",
+    "Besao",
     "Sabangan",
     "Tadian",
     "Natonin",
     "Paracelis",
     "Barlig",
     "Sadanga",
-    "Besao",
-    "Pampanga",
-    "Pangasinan",
-    "Ilocos",
-    "La Union",
-    "Nueva Vizcaya",
-    "Cagayan",
 ]
 
 
@@ -39,16 +25,20 @@ class AIService:
     def __init__(self):
         self.client = OpenAI(
             api_key=settings.OPENAI_API_KEY,
-            organization=settings.OPENAI_ORG_ID or None,
+            base_url=settings.OPENAI_BASE_URL,
         )
-        self.model = "gpt-4o-mini"
+        self.model = settings.TEXT_MODEL
 
     async def classify_article(self, title: str, content: str) -> dict:
         try:
             prompt = (
-                "You are a disaster alert classifier for the Philippines. "
-                "Analyze this news article and return a JSON object with these fields:\n"
-                "- relevant: boolean (is this disaster-related?)\n"
+                "You are a disaster and public safety alert classifier for Mountain Province, Philippines. "
+                "Analyze this article and return a JSON object with these fields:\n"
+                "- relevant: boolean (is this a disaster, public safety incident, or weather alert? Include: "
+                "natural disasters, car/road accidents, fires, floods, landslides, typhoons, earthquakes, "
+                "power outages, missing persons, rescue operations)\n"
+                "- category: string (earthquake, flood, typhoon, landslide, accident, fire, weather, "
+                "rescue, power_outage, other)\n"
                 "- severity: string (LOW, MEDIUM, HIGH, or CRITICAL)\n"
                 "- location: string (affected location, or 'unknown')\n"
                 "- confidence: float (0.0 to 1.0)\n\n"
@@ -60,7 +50,7 @@ class AIService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You classify disaster news articles. Respond with valid JSON only.",
+                        "content": "You classify disaster and public safety articles. Respond with valid JSON only.",
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -76,6 +66,7 @@ class AIService:
                 "severity": result.get("severity", "LOW").upper(),
                 "location": result.get("location", "unknown"),
                 "confidence": result.get("confidence", 0.0),
+                "category": result.get("category", "other"),
             }
         except Exception as e:
             logger.exception("AI classification failed: %s", e)
@@ -84,6 +75,7 @@ class AIService:
                 "severity": "LOW",
                 "location": "unknown",
                 "confidence": 0.0,
+                "category": "other",
             }
 
     async def assess_geographic_relevance(self, affected_location: str) -> dict:
@@ -93,10 +85,9 @@ class AIService:
 
         for area in GEOGRAPHIC_PRIORITY:
             if area.lower() in location_lower:
-                idx = GEOGRAPHIC_PRIORITY.index(area)
-                weight = 1.0 - (idx / len(GEOGRAPHIC_PRIORITY)) * 0.8
-                score = max(score, weight)
+                score = 1.0
                 matched_areas.append(area)
+                break
 
         if not matched_areas and affected_location != "unknown":
             try:
@@ -220,6 +211,7 @@ class AIService:
             "location_relevance_score": geo_result["score"],
             "risk_level": risk_level,
             "classification_confidence": classification.get("confidence", 0.0),
+            "category": classification.get("category", "other"),
         }
 
 

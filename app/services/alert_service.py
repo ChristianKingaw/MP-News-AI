@@ -12,6 +12,18 @@ from app.services.ai_service import ai_service
 logger = logging.getLogger(__name__)
 
 
+async def _capture_or_generate_image(article: NewsArticle, caption: str) -> tuple[str | None, str | None, str | None]:
+    if article.source_image_url:
+        image_path = await openai_service.download_source_image(article.source_image_url)
+        if image_path:
+            logger.info("Using source image from article: %s", article.source_image_url)
+            return article.source_image_url, image_path, None
+
+    image_prompt = await openai_service.generate_image_prompt(caption)
+    image_url, image_path = await openai_service.generate_image(image_prompt or caption)
+    return image_url, image_path, image_prompt
+
+
 async def filter_and_store_article(
     db: AsyncSession, article_data: dict
 ) -> NewsArticle | None:
@@ -34,9 +46,20 @@ async def filter_and_store_article(
     if hash_existing.scalar_one_or_none():
         return None
 
+    already_published = await db.execute(
+        select(NewsArticle).where(
+            NewsArticle.content_hash == content_hash,
+            NewsArticle.status.in_([ArticleStatus.SUMMARIZED, ArticleStatus.PUBLISHED]),
+        )
+    )
+    if already_published.scalar_one_or_none():
+        logger.info("Skipping duplicate: content already processed (hash=%s)", content_hash[:12])
+        return None
+
     article = NewsArticle(
         source_type=SourceType(article_data.get("source_type", "news_api")),
         source_url=article_data.get("source_url"),
+        source_image_url=article_data.get("source_image_url"),
         title=title,
         content=content,
         content_hash=content_hash,
@@ -56,6 +79,9 @@ async def classify_article(db: AsyncSession, article_id: uuid.UUID) -> NewsArtic
     article = result.scalar_one_or_none()
     if not article:
         return None
+
+    if article.status in (ArticleStatus.CLASSIFIED, ArticleStatus.SUMMARIZED, ArticleStatus.PUBLISHED):
+        return article
 
     analysis = await ai_service.full_analysis(article.title, article.content)
 
@@ -77,29 +103,47 @@ async def classify_article(db: AsyncSession, article_id: uuid.UUID) -> NewsArtic
 async def process_article_workflow(
     db: AsyncSession, article_id: uuid.UUID
 ) -> FacebookPost | None:
-    result = await db.execute(
-        select(NewsArticle).where(NewsArticle.id == article_id)
+    existing_post = await db.execute(
+        select(FacebookPost)
+        .where(FacebookPost.article_id == article_id)
+        .order_by(FacebookPost.created_at.desc())
+        .limit(1)
     )
-    article = result.scalar_one_or_none()
-    if not article:
+    post = existing_post.scalar_one_or_none()
+    if post:
+        return post
+
+    classified = await classify_article(db, article_id)
+    if not classified:
         return None
+
+    if not classified.is_disaster_related:
+        if classified.status != ArticleStatus.REJECTED:
+            classified.status = ArticleStatus.REJECTED
+            classified.processed_at = datetime.utcnow()
+            db.add(classified)
+        return None
+
+    if classified.location_relevance_score is not None and classified.location_relevance_score < 0.4:
+        if classified.status != ArticleStatus.CLASSIFIED:
+            classified.status = ArticleStatus.CLASSIFIED
+            db.add(classified)
+        return None
+
+    article = classified
 
     summary = await openai_service.summarize_article(
         article.title, article.content
     )
     if summary:
         article.summary = summary
-        article.status = ArticleStatus.SUMMARIZED
-        article.processed_at = datetime.utcnow()
 
     caption = await openai_service.generate_caption(
-        article.title, summary or article.content
+        article.title, summary or article.content,
+        affected_location=article.affected_location
     )
 
-    image_prompt = await openai_service.generate_image_prompt(caption)
-    image_url, image_path = await openai_service.generate_image(
-        image_prompt or caption
-    )
+    image_url, image_path, image_prompt = await _capture_or_generate_image(article, caption)
 
     post = FacebookPost(
         article_id=article.id,
@@ -108,16 +152,20 @@ async def process_article_workflow(
         image_prompt=image_prompt,
         image_url=image_url,
         image_path=image_path,
-        status=PostStatus.PENDING_REVIEW,
+        status=PostStatus.APPROVED,
     )
     db.add(post)
+
     article.status = ArticleStatus.SUMMARIZED
+    article.processed_at = datetime.utcnow()
     db.add(article)
 
     return post
 
 
 async def process_pending_articles(db: AsyncSession) -> list[FacebookPost]:
+    from app.services.facebook_service import facebook_service
+
     result = await db.execute(
         select(NewsArticle)
         .where(
@@ -128,16 +176,30 @@ async def process_pending_articles(db: AsyncSession) -> list[FacebookPost]:
     )
     articles = result.scalars().all()
 
-    posts = []
+    published = []
     for article in articles:
-        classified = await classify_article(db, article.id)
-        if classified and classified.is_disaster_related:
-            if classified.location_relevance_score and classified.location_relevance_score >= 0.2:
-                post = await process_article_workflow(db, classified.id)
-                if post:
-                    posts.append(post)
+        post = await process_article_workflow(db, article.id)
+        if not post:
+            continue
 
-    return posts
+        publish_result = await facebook_service.publish_post(
+            post.caption, post.image_path
+        )
+
+        if publish_result["error"]:
+            post.retry_count = 1
+            post.last_error = publish_result["error"]
+            post.status = PostStatus.FAILED if post.retry_count >= 3 else PostStatus.APPROVED
+        else:
+            post.status = PostStatus.PUBLISHED
+            post.fb_post_id = publish_result["fb_post_id"]
+            post.fb_post_url = publish_result["fb_post_url"]
+            post.published_at = datetime.utcnow()
+            published.append(post)
+
+        db.add(post)
+
+    return published
 
 
 async def auto_publish_approved_posts(db: AsyncSession) -> list[FacebookPost]:

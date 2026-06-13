@@ -19,6 +19,16 @@ class OpenAIService:
         self.model = settings.TEXT_MODEL
         self.image_model = settings.IMAGE_MODEL
 
+        if self.image_model:
+            image_key = settings.IMAGE_API_KEY or settings.OPENAI_API_KEY
+            image_base = settings.IMAGE_BASE_URL or "https://api.openai.com/v1"
+            self.image_client = OpenAI(
+                api_key=image_key,
+                base_url=image_base,
+            )
+        else:
+            self.image_client = None
+
     async def summarize_article(self, title: str, content: str) -> str:
         try:
             prompt = (
@@ -48,13 +58,21 @@ class OpenAIService:
             return ""
 
     async def generate_caption(
-        self, title: str, summary: str, alert_type: str = "general"
+        self, title: str, summary: str, alert_type: str = "general",
+        affected_location: str | None = None
     ) -> str:
         try:
+            location_note = ""
+            if affected_location and affected_location != "unknown":
+                location_note = f"The affected area is: {affected_location}. "
+
             prompt = (
                 "You are managing a Facebook page for Mountain Province Disaster Alerts. "
                 "Create an engaging, informative Facebook post caption based on the details below. "
-                "Include relevant hashtags like #MountainProvince #DisasterAlert. "
+                f"{location_note}"
+                "IMPORTANT: Only mention Mountain Province if the affected location is actually in Mountain Province. "
+                "Do NOT fabricate or assume the location. State the actual affected area as provided. "
+                "Include relevant hashtags like #DisasterAlert #MountainProvince (only if applicable). "
                 "Keep the tone professional yet approachable.\n\n"
                 f"ALERT TYPE: {alert_type}\n"
                 f"TITLE: {title}\n"
@@ -81,12 +99,12 @@ class OpenAIService:
             return ""
 
     async def generate_image(self, prompt: str) -> tuple[str | None, str | None]:
-        if not self.image_model:
+        if not self.image_model or not self.image_client:
             logger.info("No image model configured, skipping image generation")
             return None, None
 
         try:
-            response = self.client.images.generate(
+            response = self.image_client.images.generate(
                 model=self.image_model,
                 prompt=prompt,
                 size="1024x1024",
@@ -133,6 +151,9 @@ class OpenAIService:
             logger.warning("Image prompt generation failed: %s", e)
             return ""
 
+    async def download_source_image(self, url: str) -> str | None:
+        return await self._download_image(url)
+
     async def _download_image(self, url: str | None) -> str | None:
         if not url:
             return None
@@ -144,7 +165,17 @@ class OpenAIService:
                 resp = await client.get(url)
                 resp.raise_for_status()
 
-                filename = f"disaster_alert_{uuid.uuid4().hex[:12]}.png"
+                content_type = resp.headers.get("content-type", "")
+                if "jpeg" in content_type or "jpg" in content_type:
+                    ext = "jpg"
+                elif "png" in content_type:
+                    ext = "png"
+                elif "webp" in content_type:
+                    ext = "webp"
+                else:
+                    ext = "png"
+
+                filename = f"disaster_alert_{uuid.uuid4().hex[:12]}.{ext}"
                 filepath = STATIC_IMAGES_DIR / filename
                 filepath.write_bytes(resp.content)
 

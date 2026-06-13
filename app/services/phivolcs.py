@@ -1,4 +1,5 @@
 import logging
+import math
 import httpx
 from datetime import datetime, timezone
 from app.config import get_settings
@@ -6,12 +7,25 @@ from app.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+MP_LAT = settings.WEATHER_LAT
+MP_LON = settings.WEATHER_LON
+PROXIMITY_KM = 300
 
 class PHIVOLCSService:
     def __init__(self):
         self.base_url = settings.EARTHQUAKE_API_URL
         self.keywords = settings.disaster_keywords_list
         self.min_magnitude = 4.0
+
+    def _haversine_km(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        r = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        return r * 2 * math.asin(math.sqrt(a))
+
+    def _is_near_mp(self, lat: float, lon: float) -> bool:
+        return self._haversine_km(MP_LAT, MP_LON, lat, lon) <= PROXIMITY_KM
 
     async def fetch_earthquake_data(self) -> list[dict]:
         results: list[dict] = []
@@ -39,12 +53,19 @@ class PHIVOLCSService:
                     geom = feature.get("geometry", {})
                     coords = geom.get("coordinates", [None, None, None])
 
+                    lon, lat, depth_km = coords[0], coords[1], coords[2]
+                    if lon is None or lat is None:
+                        continue
+
+                    if not self._is_near_mp(float(lat), float(lon)):
+                        continue
+
                     mag = props.get("mag", 0) or 0
                     if float(mag) < self.min_magnitude:
                         continue
 
                     place = props.get("place", "Unknown location")
-                    title = f"M{mag} Earthquake - {place}"
+                    title = f"M{mag} Earthquake - {place} (near Mountain Province)"
                     content = self._format_earthquake_content(props, coords)
 
                     results.append({

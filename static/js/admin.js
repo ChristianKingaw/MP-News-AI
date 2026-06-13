@@ -20,10 +20,12 @@
   }
 
   async function apiFetch(url, options = {}) {
+    const token = getAccessToken();
     const res = await fetch(url, {
       credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
         ...options.headers,
       },
       ...options,
