@@ -46,6 +46,9 @@ celerybeat.pid
 *.sql.gz
 pgdata/
 
-# others
+# Project config (not for public repos)
+AGENTS.md
 .ARCHITECTURE.md
-.AGENTS.mdAGENTS.md
+
+# Celery beat schedule files
+celerybeat-schedule.*

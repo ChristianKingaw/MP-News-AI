@@ -48,7 +48,7 @@ News Sources                     Processing Pipeline                Output
 | Task Queue | Celery with Redis broker |
 | AI | OpenAI GPT-4o-mini (classification, summarization, captions) |
 | Images | DALL-E 3 |
-| Admin UI | Jinja2 server-rendered templates |
+| Admin UI | Jinja2 server-rendered templates, Chart.js dashboard, dark mode |
 | Containerization | Docker Compose (5 services) |
 
 ## Quick Start
@@ -153,8 +153,13 @@ app/
 │   ├── celery_app.py        # Celery instance + beat schedule
 │   └── scheduler.py         # Task implementations
 └── admin/                   # Admin dashboard (Jinja2)
-    ├── routes.py            # Admin page routes
-    └── templates/           # HTML templates
+    ├── routes.py            # Admin page routes + chart API
+    └── templates/           # Jinja2 HTML templates (sidebar, dashboard, data tables)
+static/
+├── css/
+│   └── style.css            # Modern CSS: sidebar, dark mode, glassmorphism
+└── js/
+    └── admin.js             # Vanilla JS: theme toggle, sidebar, Chart.js, toast, dialogs
 ```
 
 ## API Endpoints
@@ -231,16 +236,19 @@ Only articles with `location_relevance_score ≥ 0.2` advance to summarization.
 
 ## Admin Dashboard
 
-The admin dashboard at `/admin` is Jinja2 server-rendered HTML with:
+The admin dashboard at `/admin` is a modern, glassmorphism-styled Jinja2 server-rendered interface featuring:
 
-- **Dashboard** — Statistics overview (articles, posts, alerts, pending review)
+- **Sidebar navigation** — Collapsible sidebar with SVG icons, collapsible to icon-only view on desktop, overlay drawer on mobile
+- **Dark mode** — Toggle in sidebar footer, persisted to `localStorage`, respects OS `prefers-color-scheme`
+- **Glassmorphism** — Backdrop-blur translucent surfaces on cards, modals, toasts, and the sidebar itself
+- **Dashboard** — 6 animated stat cards (gradient-accented) plus 3 Chart.js visualizations: alerts by type (bar), post status distribution (donut), articles by source (horizontal bar). Charts auto-redraw on theme toggle
 - **News** — Browse and manage news articles
-- **Posts** — Approve, reject, or publish Facebook posts
+- **Posts** — Approve, reject, or publish Facebook posts (inline actions with confirm dialogs and toast notifications)
 - **Alerts** — Manage disaster alerts
 - **Tasks** — Celery task execution history
 - **Audit Logs** — Admin action audit trail
 
-Authentication is cookie-based JWT. No JavaScript framework — pure server-rendered templates with minimal vanilla JS.
+Authentication is cookie-based JWT. Zero JavaScript frameworks — vanilla JS with Chart.js loaded from CDN on the dashboard only.
 
 ## Database
 
